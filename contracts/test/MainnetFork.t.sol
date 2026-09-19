@@ -12,6 +12,11 @@ interface IForkFriendWallet {
         returns (bytes memory);
 }
 
+/// @dev The game holds no clock of its own, so it never reads Dice's delay; the test does.
+interface IForkDiceRefund {
+    function getRefundDelayBlocks() external view returns (uint64);
+}
+
 /// @notice Optional local fork check against the existing mainnet dependencies.
 /// @dev Set FRIENDSDK_FORK_RPC to run. Funding and transactions exist only on the local
 /// fork. Dice's request executes its deployed code, but delivery is explicitly mocked:
@@ -100,11 +105,37 @@ contract MainnetForkTest is Test {
         vm.expectRevert(ChanceGame.RandomnessPending.selector);
         game.settle(playId);
 
+        // Reclaim and re-request through Dice's deployed code. This is the only check
+        // that the DiceRequest layout decodes and that the refund path behaves as read.
+        sequenceNumber = _retryThroughDice(game, batchId, sequenceNumber);
+
         // MOCKED DELIVERY: impersonate Dice and choose a fixture word yielding Legend.
         // This verifies callback/settlement compatibility, not live provider delivery.
         bytes32 word = _legendWord(address(game), batchId, playId);
         vm.prank(DICE);
         game._entropyCallback(sequenceNumber, PROVIDER, word);
+    }
+
+    /// @dev Only the Friend's owner may retry, and only once Dice's own delay has passed.
+    function _retryThroughDice(ChanceGame game, uint256 batchId, uint64 stale)
+        private
+        returns (uint64 sequenceNumber)
+    {
+        address owner = IChanceGenerations(GENERATIONS).ownerOf(FRIEND_ID);
+        uint128 fee = IDiceEntropy(DICE).getFeeV2(PROVIDER, game.CALLBACK_GAS_LIMIT());
+        vm.roll(block.number + IForkDiceRefund(DICE).getRefundDelayBlocks());
+        vm.deal(owner, fee);
+        vm.prank(owner);
+        sequenceNumber = game.retryRandomness{ value: fee }(batchId);
+        assertNotEq(sequenceNumber, stale);
+        // Dice cleared the old request, so no late word can ever land on this batch.
+        assertEq(IDiceEntropy(DICE).getRequestV2(PROVIDER, stale).sequenceNumber, 0);
+        assertEq(address(game).balance, 0);
+        assertEq(owner.balance, fee);
+        (uint64 storedSequence, bool requested, bool fulfilled,) = game.randomness(batchId);
+        assertEq(storedSequence, sequenceNumber);
+        assertTrue(requested);
+        assertFalse(fulfilled);
     }
 
     function _legendWord(address game, uint256 batchId, uint256 playId)

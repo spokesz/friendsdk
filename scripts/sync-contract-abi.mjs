@@ -24,10 +24,12 @@ const sorted = (value) => Array.isArray(value)
     ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, sorted(value[key])]))
     : value;
 const canonical = (value) => JSON.stringify(sorted(value));
+// Forge omits empty inputs/outputs that the compiler's own metadata ABI spells out, on
+// receive above all. Default both sides so the guard catches real differences only.
 const canonicalAbi = (value) => Array.isArray(value)
   ? JSON.stringify(value.map((entry) => canonical(entry.type === "function"
-      ? { ...entry, outputs: entry.outputs ?? [] }
-      : entry)).sort())
+      ? { ...entry, inputs: entry.inputs ?? [], outputs: entry.outputs ?? [] }
+      : { ...entry, inputs: entry.inputs ?? [] })).sort())
   : null;
 
 let artifact;

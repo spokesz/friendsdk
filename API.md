@@ -90,6 +90,9 @@ then calls `requestRandomness(batchId)` with Dice's exact quoted ETH fee. Dice's
 authenticated callback records the result; `settle(playId)` mints each reward.
 Use `npm run resolve:contracts -- <manifest> <playId>` for this sponsor/settlement
 step during development. It can be rerun for a pending or already settled play.
+If Dice never reveals, that command is also where the Friend's owner retries the
+stuck request after Dice's own delay; the transport and the frame bridge expose
+no retry and no oracle action at all.
 Sponsorship belongs to developer tooling, not the game's limited action client.
 
 ## Hosting boundary

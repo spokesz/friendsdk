@@ -159,14 +159,33 @@ test('local Anvil: deploy/resume, canonical wallet SDK receipts, Dice resume and
     assert.equal(oracleTransactions.length, 1);
     assert.equal(await client.getBalance({ address: MAINNET.entropy }), oraclePaid);
 
+    // Dice's own delay is the only clock: before it passes the retry is not even offered.
+    const tooEarly = await resolvePlay({ ...resolution, retryStuck: async () => true });
+    assert.equal(tooEarly.retryAvailable, false);
+    assert.equal(tooEarly.retried, undefined);
+    assert.equal(oracleTransactions.length, 1);
+    await client.request({ method: 'anvil_mine', params: ['0x6'] });
+    const retried = await resolvePlay({ ...resolution, retryStuck: async () => true });
+    assert.ok(retried.retried);
+    assert.equal(retried.pending, true);
+    assert.notEqual(retried.sequenceNumber, pending.sequenceNumber);
+    assert.equal(oracleTransactions.length, 2);
+    // The reclaimed fee paid for the new request; nothing rests in the game.
+    assert.equal(await client.getBalance({ address: MAINNET.entropy }), oraclePaid);
+    assert.equal(await client.getBalance({ address: manifest.game }), 0n);
+    const stillPending = await host.read(1n);
+    assert.equal(stillPending.reservedPlays, 10n * RF);
+    assert.equal((await read(manifest.game, built.abi, 'pendingPlays')), 1n);
+
     // Mock delivery is explicit; this test does not claim to verify a live oracle operator.
-    await write(MAINNET.entropy, diceMock.abi, 'fulfill', [pending.sequenceNumber, legendWord(manifest.game, batchId, playId)]);
+    await write(MAINNET.entropy, diceMock.abi, 'fulfill', [retried.sequenceNumber, legendWord(manifest.game, batchId, playId)]);
     const settled = await resolvePlay(resolution);
     assert.equal(settled.outcomeId, 8n);
-    assert.equal(oracleTransactions.length, 2);
+    // Request, retry, settle: the retry is one extra transaction, not one extra play.
+    assert.equal(oracleTransactions.length, 3);
     const settledAgain = await resolvePlay(resolution);
     assert.equal(settledAgain.alreadySettled, true);
-    assert.equal(oracleTransactions.length, 2);
+    assert.equal(oracleTransactions.length, 3);
     const kept = await host.read(1n);
     assert.equal(kept.reservedPlays, 0n);
     assert.equal(kept.rewardLiability, 10n * RF);

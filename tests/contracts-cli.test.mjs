@@ -26,6 +26,8 @@ const gameAbi = parseAbi([
   'function plays(uint256) view returns(uint256,uint256,uint256)',
   'function randomness(uint256) view returns(uint64,bool,bool,bytes32)',
   'function requestRandomness(uint256) payable returns(uint64)', 'function settle(uint256) returns(uint256)',
+  'function retryRandomness(uint256) payable returns(uint64)',
+  'event RandomnessRetried(uint256 indexed batchId,uint64 indexed staleSequence,uint64 indexed sequenceNumber,uint256 reclaimed)',
 ]);
 
 function manifest() {
@@ -43,12 +45,13 @@ function confirmed(hash = DEPLOY_HASH, extra = {}) {
 function fixture(options = {}) {
   let allowance = options.allowance ?? 0n, requested = options.requested ?? false;
   let fulfilled = options.fulfilled ?? false, outcome = options.outcome ?? 0n;
+  let sequence = requested ? 1n : 0n;
   const writes = [], receipts = new Map([[DEPLOY_HASH, confirmed()]]);
   const client = {
     getChainId: async () => options.chainId ?? MAINNET.chainId,
-    getBlockNumber: async () => 3n, getBlock: async () => ({ hash: BLOCK_HASH }),
+    getBlockNumber: async () => options.blockNumber ?? 3n, getBlock: async () => ({ hash: BLOCK_HASH }),
     getCode: async () => '0x1234', getBalance: async () => 1n,
-    async readContract({ address, functionName, args }) {
+    async readContract({ address, functionName, args, blockNumber }) {
       if (Object.hasOwn(MAINNET, functionName)) return MAINNET[functionName];
       const fixed = { ownerOf: ACCOUNT, generation: 1, tokenBoundAccount: FRIEND, owner: ACCOUNT,
         decimals: 18, team: ACCOUNT, price: 1n, maxPrize: 10n, consumable: CONSUMABLE,
@@ -56,7 +59,14 @@ function fixture(options = {}) {
       if (functionName === 'token') return address === MAINNET.generations ? MAINNET.rf : [BigInt(MAINNET.chainId), MAINNET.generations, 7n];
       if (functionName === 'allowance') return allowance;
       if (functionName === 'plays') return [7n, args[0] === 9n ? 0n : 1n, outcome];
-      if (functionName === 'randomness') return [requested ? 1n : 0n, requested, fulfilled, zeroHash];
+      // A retry cannot be delivered in its own block, so a read pinned there never is.
+      if (functionName === 'randomness') return [sequence, requested, blockNumber === undefined ? fulfilled : false, zeroHash];
+      if (functionName === 'getRefundDelayBlocks') return 6n;
+      if (functionName === 'getRequestV2') {
+        return { provider: MAINNET.provider, sequenceNumber: sequence, numHashes: 0, commitment: zeroHash,
+          blockNumber: options.requestBlock ?? 3n, requester: GAME, useBlockhash: false,
+          callbackStatus: options.callbackStatus ?? 1, gasLimit10k: 20, feePaid: 5n };
+      }
       if (Object.hasOwn(options, functionName)) return options[functionName];
       if (Object.hasOwn(fixed, functionName)) return fixed[functionName];
       throw new Error(`Unexpected fixture read: ${functionName}`);
@@ -75,7 +85,11 @@ function fixture(options = {}) {
       } else if (request.functionName === 'fund') {
         assert.equal(allowance, 10n); allowance = 0n;
         logs = [{ address: GAME, topics: encodeEventTopics({ abi: gameAbi, eventName: 'Funded', args: { funder: ACCOUNT } }), data: encodeAbiParameters([{ type: 'uint256' }], [10n]) }];
-      } else if (request.functionName === 'requestRandomness') { requested = true; fulfilled = options.fulfillOnRequest ?? true; }
+      } else if (request.functionName === 'requestRandomness') { requested = true; sequence = 1n; fulfilled = options.fulfillOnRequest ?? true; }
+      else if (request.functionName === 'retryRandomness') {
+        sequence = 2n; fulfilled = options.fulfillOnRetry ?? false;
+        logs = [{ address: GAME, topics: encodeEventTopics({ abi: gameAbi, eventName: 'RandomnessRetried', args: { batchId: 1n, staleSequence: 1n, sequenceNumber: 2n } }), data: encodeAbiParameters([{ type: 'uint256' }], [5n]) }];
+      }
       else if (request.functionName === 'settle') outcome = 1n;
       receipts.set(hash, confirmed(hash, { to: request.address, contractAddress: null, logs: options.missingLogs ? [] : logs,
         status: options.reverted ? 'reverted' : 'success' }));
@@ -193,6 +207,62 @@ test('resolver requires a new confirmation if the Dice fee exceeds the approved 
   const pending = fixture({ requested: true });
   assert.equal((await resolvePlay({ ...pending, playId: 1n, waitMs: 0, maxOracleFee: 0n })).pending, true);
   assert.equal(pending.writes.length, 0);
+});
+
+test('resolver offers a retry only when Dice can reclaim, pays the quoted fee once, verifies the new request, and never retries a revealed or fulfilled request', async () => {
+  const ready = { requested: true, blockNumber: 9n };
+  const early = fixture({ requested: true });
+  const notYet = await resolvePlay({ ...early, playId: 1n, waitMs: 0, retryStuck: async () => true });
+  assert.equal(notYet.retryAvailable, false);
+  assert.match(notYet.reason, /before block 9/);
+  assert.equal(early.writes.length, 0);
+
+  const declined = fixture(ready);
+  const offered = await resolvePlay({ ...declined, playId: 1n, waitMs: 0, retryStuck: async () => false });
+  assert.equal(offered.retryAvailable, true);
+  assert.equal(offered.retried, undefined);
+  assert.equal(declined.writes.length, 0);
+
+  const accepted = fixture(ready);
+  const details = [];
+  const retried = await resolvePlay({ ...accepted, playId: 1n, waitMs: 0, onHash() {},
+    retryStuck: async stuck => { details.push(stuck); return true; } });
+  assert.deepEqual(accepted.writes.map(write => write.functionName), ['retryRandomness']);
+  assert.equal(accepted.writes[0].value, 5n);
+  assert.deepEqual([details[0].staleSequence, details[0].fee, details[0].reclaim, details[0].batchId], [1n, 5n, 5n, 1n]);
+  assert.equal(retried.pending, true);
+  assert.equal(retried.sequenceNumber, 2n);
+  assert.ok(retried.retried);
+
+  const delivered = fixture({ ...ready, fulfillOnRetry: true });
+  const settled = await resolvePlay({ ...delivered, playId: 1n, waitMs: 0, onHash() {}, retryStuck: async () => true });
+  assert.deepEqual(delivered.writes.map(write => write.functionName), ['retryRandomness', 'settle']);
+  assert.equal(settled.outcomeId, 1n);
+  assert.ok(settled.retried);
+
+  const unverified = fixture({ ...ready, missingLogs: true });
+  await assert.rejects(resolvePlay({ ...unverified, playId: 1n, waitMs: 0, onHash() {}, retryStuck: async () => true }), /retry could not be verified/);
+
+  // A revealed word and a delivered result are both final; neither is ever re-requested.
+  for (const options of [{ ...ready, callbackStatus: 3 }, { ...ready, fulfilled: true }]) {
+    const refused = fixture(options);
+    let asked = false;
+    await resolvePlay({ ...refused, playId: 1n, waitMs: 0, onHash() {},
+      retryStuck: async () => { asked = true; return true; } });
+    assert.equal(asked, false);
+    assert.ok(!refused.writes.some(write => write.functionName === 'retryRandomness'));
+  }
+
+  const notOwner = fixture({ ...ready, ownerOf: FRIEND });
+  const foreign = await resolvePlay({ ...notOwner, playId: 1n, waitMs: 0, retryStuck: async () => true });
+  assert.equal(foreign.retryAvailable, false);
+  assert.match(foreign.reason, /Friend owner/);
+  assert.equal(notOwner.writes.length, 0);
+
+  const raised = fixture(ready);
+  await assert.rejects(resolvePlay({ ...raised, playId: 1n, waitMs: 0, maxOracleFee: 4n,
+    retryStuck: async () => { throw new Error('offered before the fee was checked'); } }), /fee increased/);
+  assert.equal(raised.writes.length, 0);
 });
 
 test('manifest persists exact base-unit strings with restricted permissions and rejects substituted deployments', async () => {

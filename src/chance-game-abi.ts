@@ -5,10 +5,10 @@
 
 export const CHANCE_GAME_PROVENANCE = {
   "source": "contracts/src/ChanceGame.sol",
-  "sourceSha256": "df2c3494e9b236e1101760fdda3aa15202d2eadc58b430000c81249f44f460c7",
-  "sourceKeccak256": "0x749def4d991ac5fadc29bd81996755d6299940d158599b6aa41f3fc40707ea1d",
-  "compiledSourcesSha256": "49e8fea75d08484c5bcc69ecf26ffca1d98017fbb6475dbc379d4b41a290adf5",
-  "abiSha256": "5f78a50ff7475d7e01cd77feb14483cbf4fbaa07eb06f679dd74aa5d239c2853",
+  "sourceSha256": "51d37b994bb6046167e4c6fbbf82da01c4884d500ac08421629205035a2d39ad",
+  "sourceKeccak256": "0x154fd3a65b4f6d02bb80e2b8f7a6447a3f44b2f1550909a32ef957442003d884",
+  "compiledSourcesSha256": "936a4b3048e9ec0f3514e86e47e4b65c0b050c19c29b4241b9a902d5ed746bd5",
+  "abiSha256": "673b98690ea4872f2157eaadaa2259f352c0ae73a1127ee15ad733122765b1f3",
   "compiler": "0.8.36+commit.8a079791",
   "compilerSettings": {
     "remappings": [
@@ -94,6 +94,10 @@ export const CHANCE_GAME_ABI = [
       }
     ],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "receive",
+    "stateMutability": "payable"
   },
   {
     "type": "function",
@@ -580,6 +584,25 @@ export const CHANCE_GAME_ABI = [
   },
   {
     "type": "function",
+    "name": "retryRandomness",
+    "inputs": [
+      {
+        "name": "batchId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "sequenceNumber",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
     "name": "rewardLiability",
     "inputs": [],
     "outputs": [
@@ -898,6 +921,37 @@ export const CHANCE_GAME_ABI = [
         "type": "uint64",
         "indexed": true,
         "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RandomnessRetried",
+    "inputs": [
+      {
+        "name": "batchId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "staleSequence",
+        "type": "uint64",
+        "indexed": true,
+        "internalType": "uint64"
+      },
+      {
+        "name": "sequenceNumber",
+        "type": "uint64",
+        "indexed": true,
+        "internalType": "uint64"
+      },
+      {
+        "name": "reclaimed",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -1250,6 +1304,16 @@ export const CHANCE_GAME_ABI = [
   {
     "type": "error",
     "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RefundFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RetryUnavailable",
     "inputs": []
   },
   {

@@ -34,7 +34,15 @@ export const WALLET_ABI = parseAbi([
   'function owner() view returns (address)',
   'function token() view returns (uint256,address,uint256)',
 ]);
-export const ENTROPY_ABI = parseAbi(['function getFeeV2(address,uint32) view returns (uint128)']);
+// Dice's errors are parsed here so a retry that fails inside Dice prints a name.
+export const ENTROPY_ABI = parseAbi([
+  'function getFeeV2(address,uint32) view returns (uint128)',
+  'function getRefundDelayBlocks() view returns (uint64)',
+  'function getRequestV2(address,uint64) view returns ((address provider,uint64 sequenceNumber,uint32 numHashes,bytes32 commitment,uint64 blockNumber,address requester,bool useBlockhash,uint8 callbackStatus,uint16 gasLimit10k,uint128 feePaid))',
+  'error RefundNotAvailable()',
+  'error NoSuchRequest()',
+  'error Unauthorized()',
+]);
 export const equal = (a, b) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
 export const json = value => JSON.stringify(value, (_, item) => typeof item === 'bigint' ? item.toString() : item, 2) + '\n';
 

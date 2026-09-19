@@ -80,16 +80,24 @@ contract MockFriendWallet {
     {
         return this.onERC1155Received.selector;
     }
+
+    receive() external payable { }
 }
 
 contract MockDice is IDiceEntropy {
     uint128 public constant FEE = 0.000_05 ether;
+    uint64 public constant REFUND_DELAY_BLOCKS = 6;
     address public immutable provider;
     uint64 public sequenceNumber;
-    mapping(uint64 => address) public consumers;
+    uint128 public fee = FEE;
+    mapping(uint64 => DiceRequest) private _requests;
     bool public failRequests;
 
     error RequestFailed();
+    // Dice's own names, so a game-side revert reads as it would against deployed code.
+    error Unauthorized();
+    error RefundNotAvailable();
+    error NoSuchRequest();
 
     constructor(address provider_) {
         provider = provider_;
@@ -99,9 +107,31 @@ contract MockDice is IDiceEntropy {
         failRequests = value;
     }
 
+    function setFee(uint128 value) external {
+        fee = value;
+    }
+
+    /// @dev Dice's failed-callback state: the word is already public and stays requestable.
+    function setCallbackFailed(uint64 sequence) external {
+        _requests[sequence].callbackStatus = 3;
+    }
+
     function getFeeV2(address provider_, uint32 gasLimit) external view returns (uint128) {
         assert(provider_ == provider && gasLimit == 200_000);
-        return FEE;
+        return fee;
+    }
+
+    function getRefundDelayBlocks() external pure returns (uint64) {
+        return REFUND_DELAY_BLOCKS;
+    }
+
+    function getRequestV2(address provider_, uint64 sequence)
+        external
+        view
+        returns (DiceRequest memory)
+    {
+        assert(provider_ == provider);
+        return _requests[sequence];
     }
 
     function requestV2(address provider_, bytes32, uint32 gasLimit)
@@ -110,15 +140,44 @@ contract MockDice is IDiceEntropy {
         returns (uint64 sequence)
     {
         if (failRequests) revert RequestFailed();
-        assert(provider_ == provider && gasLimit == 200_000 && msg.value == FEE);
+        assert(provider_ == provider && gasLimit == 200_000 && msg.value == fee);
         sequence = ++sequenceNumber;
-        consumers[sequence] = msg.sender;
+        _requests[sequence] = DiceRequest({
+            provider: provider,
+            sequenceNumber: sequence,
+            numHashes: 0,
+            commitment: bytes32(0),
+            blockNumber: uint64(block.number),
+            requester: msg.sender,
+            useBlockhash: false,
+            callbackStatus: 1,
+            gasLimit10k: 20,
+            feePaid: uint128(msg.value)
+        });
+    }
+
+    /// @dev Only the requester reclaims, only after the delay. Clearing zeroes the stored
+    /// sequence number and leaves the remaining fields, exactly as Dice does.
+    function refundRequest(address provider_, uint64 sequence) external {
+        assert(provider_ == provider);
+        DiceRequest storage stored = _requests[sequence];
+        if (sequence == 0 || stored.sequenceNumber != sequence) revert NoSuchRequest();
+        if (msg.sender != stored.requester) revert Unauthorized();
+        if (block.number < stored.blockNumber + REFUND_DELAY_BLOCKS) revert RefundNotAvailable();
+        uint128 feePaid = stored.feePaid;
+        stored.sequenceNumber = 0;
+        (bool sent,) = msg.sender.call{ value: feePaid }("");
+        assert(sent);
     }
 
     function fulfill(uint64 sequence, bytes32 word) external returns (uint256 gasUsed) {
+        DiceRequest storage stored = _requests[sequence];
+        address consumer = stored.requester;
+        if (consumer == address(0) || stored.callbackStatus != 1) revert NoSuchRequest();
         uint256 beforeGas = gasleft();
-        ChanceGame(consumers[sequence])._entropyCallback(sequence, provider, word);
+        ChanceGame(payable(consumer))._entropyCallback(sequence, provider, word);
         gasUsed = beforeGas - gasleft();
+        stored.sequenceNumber = 0;
     }
 }
 
@@ -418,6 +477,10 @@ contract ChanceGameTest is Test {
         vm.expectRevert(ChanceGame.RandomnessPending.selector);
         game.settle(playId);
         game.requestRandomness{ value: dice.FEE() }(batchId);
+        vm.deal(ALICE, 1 ether);
+        vm.prank(ALICE);
+        vm.expectRevert(MockDice.RefundNotAvailable.selector);
+        game.retryRandomness{ value: 0.000_05 ether }(batchId);
         vm.expectRevert(ChanceGame.RandomnessPending.selector);
         game.settle(playId);
         vm.warp(block.timestamp + 365 days);
@@ -425,6 +488,137 @@ contract ChanceGameTest is Test {
         game.requestRandomness{ value: 0.000_05 ether }(batchId);
         assertEq(game.reservedPlays(), 10 ether);
         _assertBacking();
+    }
+
+    function testRetryNeedsFriendControllerAndDiceDelayThenBindsOneNewRequest() public {
+        game.fund(10 ether);
+        _buy(ALICE, ALICE_FRIEND, 1);
+        vm.prank(ALICE);
+        (uint256 playId, uint256 batchId) = game.play(ALICE_FRIEND, 1);
+        uint128 fee = dice.FEE();
+        uint64 stale = game.requestRandomness{ value: fee }(batchId);
+
+        vm.deal(BOB, 1 ether);
+        vm.prank(BOB);
+        vm.expectRevert(ChanceGame.NotFriendController.selector);
+        game.retryRandomness{ value: fee }(batchId);
+        vm.deal(ALICE, 1 ether);
+        vm.prank(ALICE);
+        vm.expectRevert(MockDice.RefundNotAvailable.selector);
+        game.retryRandomness{ value: fee }(batchId);
+
+        uint256 ownerETH = ALICE.balance;
+        vm.roll(block.number + 6);
+        vm.prank(ALICE);
+        uint64 retried = game.retryRandomness{ value: fee }(batchId);
+        assertNotEq(retried, stale);
+        assertEq(ALICE.balance, ownerETH);
+        _assertOnlyTheRequestChanged(batchId, retried);
+        vm.expectRevert(ChanceGame.InvalidRandomness.selector);
+        dice.fulfill(stale, bytes32(0));
+
+        // The canonical wallet is the second controller the game accepts.
+        vm.roll(block.number + 6);
+        uint64 second = _retryAsWallet(batchId);
+        assertNotEq(second, retried);
+        _assertOnlyTheRequestChanged(batchId, second);
+
+        dice.fulfill(second, bytes32(_wordForOutcome(batchId, playId, 8)));
+        game.settle(playId);
+        (,, uint256 outcomeId) = game.plays(playId);
+        assertEq(outcomeId, 8);
+        assertEq(game.pendingPlays(), 0);
+        assertEq(address(game).balance, 0);
+        _assertBacking();
+    }
+
+    function testRetryPaysFullFeeAndReturnsReclaimedFee() public {
+        game.fund(10 ether);
+        _buy(ALICE, ALICE_FRIEND, 1);
+        vm.prank(ALICE);
+        (, uint256 batchId) = game.play(ALICE_FRIEND, 1);
+        uint128 paid = dice.FEE();
+        game.requestRandomness{ value: paid }(batchId);
+        vm.deal(ALICE, 1 ether);
+
+        // A raised fee is paid in full now; the old fee comes back in the same call.
+        dice.setFee(paid * 2);
+        vm.roll(block.number + 6);
+        vm.prank(ALICE);
+        vm.expectRevert(ChanceGame.IncorrectOracleFee.selector);
+        game.retryRandomness{ value: paid }(batchId);
+        uint256 ownerETH = ALICE.balance;
+        vm.prank(ALICE);
+        game.retryRandomness{ value: paid * 2 }(batchId);
+        assertEq(ALICE.balance, ownerETH - paid * 2 + paid);
+        assertEq(address(game).balance, 0);
+
+        // A lowered fee costs less than what Dice returns; neither rests in the game.
+        dice.setFee(paid / 2);
+        vm.roll(block.number + 6);
+        vm.prank(ALICE);
+        vm.expectRevert(ChanceGame.IncorrectOracleFee.selector);
+        game.retryRandomness{ value: paid * 2 }(batchId);
+        ownerETH = ALICE.balance;
+        vm.prank(ALICE);
+        game.retryRandomness{ value: paid / 2 }(batchId);
+        assertEq(ALICE.balance, ownerETH - paid / 2 + paid * 2);
+        assertEq(address(game).balance, 0);
+    }
+
+    function testRetryRefusesUnrequestedFulfilledSettledAndRevealedBatches() public {
+        game.fund(30 ether);
+        _buy(ALICE, ALICE_FRIEND, 3);
+        vm.startPrank(ALICE);
+        (, uint256 unrequested) = game.play(ALICE_FRIEND, 1);
+        (uint256 deliveredPlay, uint256 delivered) = game.play(ALICE_FRIEND, 1);
+        (, uint256 revealed) = game.play(ALICE_FRIEND, 1);
+        vm.stopPrank();
+        vm.deal(ALICE, 1 ether);
+        uint128 fee = dice.FEE();
+        uint256 ownerETH = ALICE.balance;
+
+        vm.prank(ALICE);
+        vm.expectRevert(ChanceGame.InvalidBatch.selector);
+        game.retryRandomness{ value: fee }(99);
+        vm.prank(ALICE);
+        vm.expectRevert(ChanceGame.RetryUnavailable.selector);
+        game.retryRandomness{ value: fee }(unrequested);
+
+        _fulfill(delivered, _wordForOutcome(delivered, deliveredPlay, 8));
+        vm.roll(block.number + 6);
+        vm.prank(ALICE);
+        vm.expectRevert(ChanceGame.RetryUnavailable.selector);
+        game.retryRandomness{ value: fee }(delivered);
+        game.settle(deliveredPlay);
+        vm.prank(ALICE);
+        vm.expectRevert(ChanceGame.RetryUnavailable.selector);
+        game.retryRandomness{ value: fee }(delivered);
+
+        // Dice status 3 means the word is already public; reclaiming it would be a reroll.
+        uint64 sequence = game.requestRandomness{ value: fee }(revealed);
+        dice.setCallbackFailed(sequence);
+        vm.roll(block.number + 6);
+        vm.prank(ALICE);
+        vm.expectRevert(ChanceGame.RetryUnavailable.selector);
+        game.retryRandomness{ value: fee }(revealed);
+
+        assertEq(ALICE.balance, ownerETH);
+        assertEq(address(game).balance, 0);
+        assertEq(address(dice).balance, 2 * fee);
+        _assertBacking();
+    }
+
+    function testGameAcceptsEtherOnlyFromDice() public {
+        vm.deal(BOB, 1 ether);
+        vm.prank(BOB);
+        (bool sent,) = address(game).call{ value: 1 wei }("");
+        assertFalse(sent);
+        vm.deal(ALICE, 1 ether);
+        vm.prank(ALICE);
+        (sent,) = address(game).call{ value: 1 wei }("");
+        assertFalse(sent);
+        assertEq(address(game).balance, 0);
     }
 
     function testSponsorRequestsOnlyCommittedBatchesAndExactFee() public {
@@ -549,6 +743,34 @@ contract ChanceGameTest is Test {
         assertEq(game.rewardLiability(), 0);
     }
 
+    /// @dev One play still pending on one fresh request, with its reserve untouched.
+    function _assertOnlyTheRequestChanged(uint256 batchId, uint64 expected) private view {
+        (uint64 sequence, bool requested, bool fulfilled,) = game.randomness(batchId);
+        assertEq(sequence, expected);
+        assertTrue(requested);
+        assertFalse(fulfilled);
+        assertEq(game.pendingPlays(), 1);
+        assertEq(game.reservedPlays(), 10 ether);
+        assertEq(address(game).balance, 0);
+    }
+
+    function _retryAsWallet(uint256 batchId) private returns (uint64 sequence) {
+        address wallet = _account(ALICE_FRIEND);
+        vm.deal(wallet, 1 ether);
+        uint256 walletETH = wallet.balance;
+        sequence = abi.decode(
+            _execute(
+                ALICE,
+                ALICE_FRIEND,
+                address(game),
+                dice.FEE(),
+                abi.encodeCall(ChanceGame.retryRandomness, (batchId))
+            ),
+            (uint64)
+        );
+        assertEq(wallet.balance, walletETH);
+    }
+
     function _assertBacking() private view {
         assertGe(rf.balanceOf(address(game)), game.reservedPlays() + game.rewardLiability());
         assertEq(
@@ -576,9 +798,16 @@ contract ChanceGameTest is Test {
     }
 
     function _execute(address owner, uint256 friendId, address target, bytes memory data) private {
+        _execute(owner, friendId, target, 0, data);
+    }
+
+    function _execute(address owner, uint256 friendId, address target, uint256 value, bytes memory data)
+        private
+        returns (bytes memory)
+    {
         address account = _account(friendId);
         vm.prank(owner);
-        MockFriendWallet(account).execute(target, 0, data, 0);
+        return MockFriendWallet(payable(account)).execute(target, value, data, 0);
     }
 
     function _account(uint256 friendId) private view returns (address) {

@@ -84,7 +84,9 @@ If Dice is still pending or you interrupted the process after a committed play, 
 npm run resolve:contracts -- "$FRIENDSDK_DEPLOYMENT" PLAY_ID
 ```
 
-Resolution reuses the existing request; it does not buy another play or reroll. Oracle delivery depends on Dice's provider. Pending plays and kept rewards remain backed while waiting. The supplied game has no refund, replacement request or expiry.
+Resolution reuses the existing request; it does not buy another play or reroll. Oracle delivery depends on Dice's provider. Pending plays and kept rewards remain backed while waiting.
+
+If the provider never reveals, Dice lets whoever made the request reclaim it after its own short delay of a few L1 blocks. The resolve command notices that state and offers a retry: one transaction reclaims the stuck request and sends a new one for the same play group. Only the Friend's owner can send it, and only through a typed `RETRY` confirmation. It costs Dice's current fee and returns the reclaimed one in the same transaction, so the ETH involved is the oracle fee moving, never a payout or an RF change. The play, its bait, its play IDs and its reserved backing do not change, and a result Dice has already delivered can never be requested again. There is no refund of bait or RF, no way to void a play, and no expiry. If Dice itself is paused or removed, no option here helps and the reserve stays locked. The retry is proven against Dice's deployed code on a local fork; no retry against a genuinely stuck request on mainnet has been observed yet, and this sentence stands until a developer reports one.
 
 ## 4. Run the local browser preview
 
