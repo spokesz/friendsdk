@@ -17,20 +17,23 @@ You run a coffee shop staffed by your Rare Friend NFT. The Friend's token ID det
 
 ## Two ways to play
 
-### 1. Offline demo (no wallet, no NFT) -- **recommended for first try**
+### 1. Offline demo (no wallet, no NFT, no chain) -- **recommended for first try**
 
 **https://rocky-motivation-sussex-influence.trycloudflare.com/cafe/demo.html**
 
 A standalone HTML preview that runs the full cafe game loop with a sample Friend (token ID 7730, skill 85, generation 1). Anyone can play -- no browser extension, no NFT, no RF. This uses the same game balance and satisfaction tier table as the SDK version, so reviewers can verify the design without setup.
 
-### 2. Live SDK preview (Robinhood Wallet + Generations NFT required)
+### 2. Live SDK preview (Robinhood Wallet + Generations NFT + Robinhood mainnet 4663)
 
 **https://rocky-motivation-sussex-influence.trycloudflare.com/cafe/** (or `./game.html`)
 
-The SDK v0.1.2 preview deployment reads your Friend data from Robinhood mainnet (chainId 4663) via the SDK's hardwired NFT ownership gate. To play:
+The SDK v0.1.2 preview deployment reads your Friend data from Robinhood mainnet (chainId 4663) via the SDK's hardwired NFT ownership gate. To play, you must:
 
-1. Install [Robinhood Wallet](https://robinhood.com/us/en/crypto/wallet/) browser extension, and
-2. Hold a Generations NFT in the connected wallet (gen 1+).
+1. Install [Robinhood Wallet](https://robinhood.com/us/en/crypto/wallet/) browser extension, **and**
+2. Hold at least one **Generations NFT (generation 1+)** in the connected wallet, **and**
+3. Switch your wallet network to **Robinhood mainnet (chainId 4663)**.
+
+> **Important correction:** preview mode still requires the on-chain NFT ownership gate. The SDK reads `OwnedFriends` from chain 4663 via viem; if you have no Generations NFT on Robinhood mainnet, the picker shows "No playable Friends found." This is by design and cannot be bypassed without holding real assets.
 
 > **HTTPS required.** The URL above is HTTPS via Cloudflare Tunnel -- necessary because Robinhood Wallet and other EIP-1193 providers only inject into secure contexts. HTTP URLs will not work for the live preview.
 
@@ -46,7 +49,7 @@ Preview rolls are simulated; no RF is actually spent or earned. No live contract
 | Category | Character Spotlight |
 | Submission path | `submissions/rare-friends-cafe/` |
 | **Offline demo (no wallet)** | https://rocky-motivation-sussex-influence.trycloudflare.com/cafe/demo.html |
-| **Live SDK preview (wallet + NFT)** | https://rocky-motivation-sussex-influence.trycloudflare.com/cafe/ |
+| **Live SDK preview (wallet + NFT + chain 4663)** | https://rocky-motivation-sussex-influence.trycloudflare.com/cafe/ |
 | SDK | FriendSDK v0.1.2 |
 | Deadline | September 30, 2026 |
 
@@ -115,7 +118,8 @@ Every Friend has a unique skill. The cafe tells you who they are before you star
 - Node.js 22+
 - npm
 - Git
-- Robinhood mainnet wallet holding a Generations NFT (gen 1+) -- only for the SDK preview, not for the offline demo
+- For the SDK preview: Robinhood mainnet (chainId 4663) wallet holding a Generations NFT (gen 1+) -- even in preview mode
+- For the offline demo: just a browser
 
 ### Setup
 
@@ -148,7 +152,9 @@ Open the displayed URL (normally `http://localhost:4173`), connect your Robinhoo
 
 ## Known limitations
 
-- The offline demo (`demo.html`) is a simplified client-side version of the same loop. The live SDK preview (`game.html`) requires Robinhood Wallet + a Generations NFT + HTTPS context.
+- The offline demo (`demo.html`) is a simplified client-side version of the same loop. It runs without any SDK, wallet, or chain.
+- The live SDK preview (`game.html`) requires Robinhood Wallet + a Generations NFT + Robinhood mainnet (chainId 4663). **Even in preview mode, the SDK enforces the on-chain ownership gate** -- it reads `OwnedFriends` from the public RPC and shows "No playable Friends found" if you have no Generations NFT.
+- I previously claimed "anyone can play" of the SDK preview -- that was wrong. The correct statement is: the **offline demo** (`demo.html`) is open to anyone; the SDK preview requires Robinhood + chain 4663 + NFT.
 - Robinhood mainnet RPC may rate-limit under heavy load.
 - Drink art is AI-generated and may benefit from manual refinement.
 - No multi-customer queueing (one customer at a time, by design).
@@ -163,6 +169,7 @@ Open the displayed URL (normally `http://localhost:4173`), connect your Robinhoo
 - **Customer memory**: regulars remember you (NPC state)
 - **Live mode**: spend real RF on beans, settle real tips via SDK Dice
 - **Multi-customer queue**: serve 2-3 customers in parallel
+- **Offline-mock mode**: let the SDK preview accept a "demo Friend" override for reviewers without NFT (would require upstream SDK change)
 
 ## Credits
 
