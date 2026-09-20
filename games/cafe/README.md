@@ -1,38 +1,48 @@
-# Rare Friends Café
+# Rare Friends Cafe
 
-You run a coffee shop staffed by your Rare Friend NFT. The Friend's token ID determines barista skill, which affects drink quality and tip earnings. Five customers per shift, five menu items, real RF economy.
+You run a coffee shop staffed by your Rare Friend NFT. The Friend's token ID determines barista skill, which affects drink quality and tip earnings. Five customers per shift, five menu items, real RF economy (preview mode).
 
-> Submitted to the [Rare Friends Vibeathon 2026](https://rarefriends.com/) — **Character Spotlight** category.
+> Submitted to the [Rare Friends Vibeathon 2026](https://rarefriends.com/) -- **Character Spotlight** category.
 
-![Rare Friends Café screenshot](./media/screenshot.jpg)
+![Rare Friends Cafe screenshot](./media/screenshot.jpg)
 
 ## TL;DR
 
-- Pick your Rare Friend as the barista — their `tokenId` determines skill level (1-100)
+- Pick your Rare Friend as the barista -- their `tokenId` determines skill level (1-100)
 - 5 customers per shift, each orders one of 5 drink types
 - Brew the drink by spending the right amount of beans
 - Customer satisfaction rolls via SDK chance game (preview mode, simulated)
-- Friend skill adds a bonus to every tip (skill 1-100 → +0% to +20% tip)
+- Friend skill adds a bonus to every tip (skill 1-100 -> +0% to +20% tip)
 - Tips = simulated RF earnings; spend beans (1 RF equivalent per bean) to keep brewing
+
+## Playable preview (live demo)
+
+**http://43.156.175.175/cafe/**
+
+> Important: this is a **preview deployment**. The game reads your friend's data from Robinhood mainnet (chainId 4663) via the SDK's hardwired NFT ownership gate. To play, you must:
+> 1. Install [Robinhood Wallet](https://robinhood.com/us/en/crypto/wallet/) browser extension, and
+> 2. Hold a Generations NFT in the connected wallet (gen 1+).
+>
+> Preview rolls are simulated; no RF is actually spent or earned. No live contract is bound to this preview.
 
 ## Project info
 
 | Field | Value |
 |---|---|
-| Project name | Rare Friends Café |
+| Project name | Rare Friends Cafe |
 | Builder | wudong6120415 |
 | Contact | GitHub [@wudong6120415](https://github.com/wudong6120415) |
 | Category | Character Spotlight |
 | Submission path | `submissions/rare-friends-cafe/` |
-| **Public playable preview** | http://43.156.175.175/cafe/ (open in browser, click Connect wallet) |
-| SDK | FriendSDK v0.1 |
+| **Public playable preview** | http://43.156.175.175/cafe/ (Robinhood Wallet + Generations NFT required) |
+| SDK | FriendSDK v0.1.2 |
 | Deadline | September 30, 2026 |
 
 ## The experience
 
-A Rare Friend NFT is the barista of your café. Connect your Robinhood mainnet wallet, choose your Friend, and they appear behind the counter with a skill badge. As customers arrive one by one, you read their order, brew the right drink with the right bean count, and watch their reaction.
+A Rare Friend NFT is the barista of your cafe. Connect your Robinhood mainnet wallet, choose your Friend, and they appear behind the counter with a skill badge. As customers arrive one by one, you read their order, brew the right drink with the right bean count, and watch their reaction.
 
-Each drink has a base tip and a bean cost. The SDK's chance game rolls the customer satisfaction tier (Furious → Disappointed → Satisfied → Happy → Delighted). The Friend's skill level adds a permanent bonus to every tip.
+Each drink has a base tip and a bean cost. The SDK's chance game rolls the customer satisfaction tier (Furious -> Disappointed -> Satisfied -> Happy -> Delighted). The Friend's skill level adds a permanent bonus to every tip.
 
 ## Menu
 
@@ -54,7 +64,7 @@ Each drink has a base tip and a bean cost. The SDK's chance game rolls the custo
 | Happy | 30% | 100% |
 | Delighted | 10% | 200% |
 
-Final tip = `baseTip × tierMultiplier × (1 + skill/500)` for the Friend's skill 1-100.
+Final tip = `baseTip * tierMultiplier * (1 + skill/500)` for the Friend's skill 1-100.
 
 ## Barista skill (from token ID)
 
@@ -67,7 +77,7 @@ name =
   1-24:   "Novice Barista"
 ```
 
-Every Friend has a unique skill. The café tells you who they are before you start.
+Every Friend has a unique skill. The cafe tells you who they are before you start.
 
 ## Files
 
@@ -75,8 +85,8 @@ Every Friend has a unique skill. The café tells you who they are before you sta
 |---|---|
 | `index.tsx` | Main game component: HUD, customer queue, brewing, reveal |
 | `game.json` | Outcome table: 5 satisfaction tiers + weights |
-| `style.css` | Café-themed UI: warm browns, cream backgrounds, barista avatar |
-| `media/cafe-bg.jpg` | Café interior background (AI-generated) |
+| `style.css` | Cafe-themed UI: warm browns, cream backgrounds, barista avatar |
+| `media/cafe-bg.jpg` | Cafe interior background (AI-generated) |
 | `media/espresso.jpg` | Espresso cup art |
 | `media/latte.jpg` | Latte glass art |
 | `media/cappuccino.jpg` | Cappuccino cup art |
@@ -88,11 +98,11 @@ Every Friend has a unique skill. The café tells you who they are before you sta
 
 ### Prerequisites
 
-- Linux or Ubuntu in WSL2 on Windows
+- Linux or Ubuntu in WSL2 on Windows, or macOS
 - Node.js 22+
 - npm
 - Git
-- Robinhood mainnet wallet holding a Generations NFT (gen 1+) for the wallet connection screen
+- Robinhood mainnet wallet holding a Generations NFT (gen 1+) -- even in preview mode
 
 ### Setup
 
@@ -105,7 +115,7 @@ cp submissions/rare-friends-cafe/* games/rare-friends-cafe/
 npm run dev:game -- games/rare-friends-cafe
 ```
 
-Open the displayed URL (normally `http://localhost:4173`), connect your wallet, choose your Friend, and start serving.
+Open the displayed URL (normally `http://localhost:4173`), connect your Robinhood Wallet, choose your Friend, and start serving.
 
 ### Controls
 
@@ -120,16 +130,16 @@ Open the displayed URL (normally `http://localhost:4173`), connect your wallet, 
 - `npm run typecheck` passes
 - `npm run build` passes
 - `npm run dev:game` boots at `localhost:4173`
-- `npm test` passes
+- Preview deployed at `http://43.156.175.175/cafe/` (live demo)
 
 ## Known limitations
 
-- Player must hold a real Generations NFT for the wallet selection screen, even in preview.
+- Preview deployment reads wallet and NFT data on-chain; users need Robinhood Wallet + a Generations NFT to play, even in preview. There is no offline or mock mode in this MVP.
 - Robinhood mainnet RPC may rate-limit under heavy load.
 - Drink art is AI-generated and may benefit from manual refinement.
 - No multi-customer queueing (one customer at a time, by design).
 - Bean economy is currently fixed (no upgrade system yet); preview economy only.
-- Live mode (real RF settlements) is not enabled in this MVP.
+- Live mode (real RF settlements) is not enabled -- production deployment requires an explicit chain deployment.
 
 ## Future work
 
@@ -138,10 +148,11 @@ Open the displayed URL (normally `http://localhost:4173`), connect your wallet, 
 - **Barista outfits**: Friend appearance changes based on tip earnings tier
 - **Customer memory**: regulars remember you (NPC state)
 - **Live mode**: spend real RF on beans, settle real tips via SDK Dice
+- **Offline preview**: let reviewers play without a wallet by faking a Friend sprite
 
 ## Credits
 
-- **FriendSDK v0.1** by spokesz — runtime, chance game, wallet, container
-- **MiniMax-M3** — game design and code generation
-- **MiniMax image-01** — drink and café artwork
-- **Rare Friends** — theme and integration
+- **FriendSDK v0.1.2** by spokesz -- runtime, chance game, wallet, container
+- **MiniMax-M3** -- game design and code generation
+- **MiniMax image-01** -- drink and cafe artwork
+- **Rare Friends** -- theme and integration
