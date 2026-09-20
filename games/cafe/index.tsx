@@ -6,6 +6,7 @@ import { createFriendSoundKit, type FriendSoundKit, type FriendSoundCue } from "
 import { GameMenu } from "@rarefriends/friendsdk/frame";
 import { formatGameAmount } from "@rarefriends/friendsdk/ui";
 import type { GamePlay, GameSnapshot } from "@rarefriends/friendsdk/game";
+import { outcomeForRoll, samplePreviewRoll } from "@rarefriends/friendsdk/game";
 import "@rarefriends/friendsdk/frame.css";
 import "./style.css";
 
@@ -159,19 +160,29 @@ export default function RareFriendsCafe({ friendId, client, paused = false }: Ga
     setBeans((b) => b - currentOrder.expectedBeanCost);
     setPhase("reveal");
     void act(async () => {
-      await client.play();
-    }, "play", () => {
-      const play = result ?? snapshot?.lastPlay ?? null;
-      const outcome = play?.outcomeName ?? "";
-      setLastResultName(outcome);
-      // Tip scale: from definition outcomes (satisfaction tier -> base tip)
-      // Furious 0% / Disappointed 20% / Satisfied 50% / Happy 100% / Delighted 200%
+      // Preview-mode flow: buy -> play -> settle -> redeem.
+      // Buy + redeem are wrapped so the cafe stays self-funding in preview.
+      if (client.mode === "preview") {
+        try { await client.buy(1n); } catch { /* preview never has RF balance */ }
+      }
+      const plays = await client.play(1n);
+      const playId = plays[0]?.id;
+      if (typeof playId !== "bigint") throw new Error("Chance game did not return a play id.");
+      const settled = await client.settle(playId);
+      const outcomeId = settled.outcomeId;
+      if (typeof outcomeId !== "number") throw new Error("Settle returned no outcome.");
+      if (client.mode === "preview") {
+        try { await client.redeem(outcomeId, 1n); } catch { /* ignore in preview */ }
+      }
+      // Map outcome to UI name. Outcome IDs are 1-indexed into definition.outcomes.
+      const outcomeName = client.definition.outcomes[outcomeId - 1]?.name ?? "";
+      setLastResultName(outcomeName);
+      // Tip scale: Furious 0% / Disappointed 20% / Satisfied 50% / Happy 100% / Delighted 200%
       let tipMultiplier = 0n;
-      if (outcome === "Delighted customer") tipMultiplier = 2n;
-      else if (outcome === "Happy customer") tipMultiplier = 1n;
-      else if (outcome === "Satisfied customer") tipMultiplier = 5n / 10n;
-      else if (outcome === "Disappointed customer") tipMultiplier = 2n / 10n;
-      else tipMultiplier = 0n;
+      if (outcomeName === "Delighted customer") tipMultiplier = 2n;
+      else if (outcomeName === "Happy customer") tipMultiplier = 1n;
+      else if (outcomeName === "Satisfied customer") tipMultiplier = 5n / 10n;
+      else if (outcomeName === "Disappointed customer") tipMultiplier = 2n / 10n;
       // Apply barista skill bonus (skill 1-100 -> +0% to +20%)
       const skillBonus = BigInt(baristaSkill) * 20n / 100n;
       const tipBase = currentOrder.baseTip;
@@ -190,7 +201,7 @@ export default function RareFriendsCafe({ friendId, client, paused = false }: Ga
           setPhase("idle");
         }
       }, reducedMotion ? 800 : 1600);
-    });
+    }, "action-start");
   }
 
   function dismissSummary() {

@@ -1,7 +1,7 @@
 {
   "name": "Rare Friends Café",
   "consumable": "Cup of coffee",
-  "price": "0",
+  "price": "1",
   "outcomes": [
     {
       "name": "Furious customer",
