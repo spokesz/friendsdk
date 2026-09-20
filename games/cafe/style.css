@@ -1,0 +1,283 @@
+.cafe-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(180deg, #fdf6e3 0%, #f5e6c8 100%);
+  color: #3b2a1a;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  user-select: none;
+}
+
+.cafe-hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background: rgba(60, 40, 20, 0.92);
+  color: #fff8e7;
+  font-size: 14px;
+  border-bottom: 2px solid #2a1810;
+}
+
+.cafe-barista {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cafe-barista-avatar {
+  font-size: 28px;
+  background: #fff8e7;
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cafe-barista-name {
+  font-weight: 700;
+}
+
+.cafe-barista-skill {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.cafe-stats {
+  display: flex;
+  gap: 16px;
+}
+
+.cafe-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.cafe-stat-label {
+  font-size: 10px;
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cafe-stat-value {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.cafe-stage {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow: hidden;
+}
+
+.cafe-cafe-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255, 220, 130, 0.4) 0%, transparent 50%),
+    radial-gradient(circle at 70% 70%, rgba(180, 120, 60, 0.3) 0%, transparent 50%),
+    repeating-linear-gradient(45deg, transparent, transparent 40px, rgba(120, 80, 40, 0.04) 40px, rgba(120, 80, 40, 0.04) 80px);
+  pointer-events: none;
+}
+
+.cafe-prompt {
+  position: relative;
+  text-align: center;
+  background: rgba(255, 248, 230, 0.95);
+  padding: 32px 48px;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(60, 40, 20, 0.15);
+  border: 2px solid #8b6f3f;
+}
+
+.cafe-prompt-emoji {
+  font-size: 64px;
+  margin-bottom: 12px;
+}
+
+.cafe-prompt h2 {
+  font-size: 22px;
+  margin: 0 0 16px 0;
+  color: #3b2a1a;
+}
+
+.cafe-order {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+}
+
+.cafe-order-customer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(255, 248, 230, 0.95);
+  padding: 16px 24px;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(60, 40, 20, 0.1);
+}
+
+.cafe-order-face {
+  font-size: 56px;
+}
+
+.cafe-order-bubble {
+  background: #fff;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid #d4c4a0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cafe-order-emoji {
+  font-size: 24px;
+}
+
+.cafe-order-action {
+  display: flex;
+  gap: 12px;
+}
+
+.cafe-btn {
+  background: #8b6f3f;
+  color: #fff8e7;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.cafe-btn:hover:not(:disabled) {
+  background: #6d572f;
+}
+
+.cafe-btn-primary {
+  background: #b87333;
+  font-size: 16px;
+  padding: 12px 24px;
+}
+
+.cafe-btn-primary:hover:not(:disabled) {
+  background: #8b5520;
+}
+
+.cafe-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cafe-reveal {
+  position: relative;
+  text-align: center;
+  background: rgba(255, 248, 230, 0.95);
+  padding: 32px 48px;
+  border-radius: 16px;
+  border: 2px solid #b87333;
+  animation: cafe-pop 320ms ease-out;
+}
+
+.cafe-reveal-emoji {
+  font-size: 56px;
+  margin-bottom: 8px;
+}
+
+.cafe-reveal-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #b87333;
+}
+
+.cafe-reveal-spinner {
+  margin-top: 8px;
+  font-size: 24px;
+  animation: cafe-spin 1s linear infinite;
+}
+
+@keyframes cafe-pop {
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes cafe-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.cafe-summary {
+  position: relative;
+  text-align: center;
+  background: rgba(255, 248, 230, 0.95);
+  padding: 32px 48px;
+  border-radius: 16px;
+  border: 2px solid #b87333;
+}
+
+.cafe-summary h2 {
+  margin: 0 0 16px 0;
+  font-size: 28px;
+  color: #b87333;
+}
+
+.cafe-summary-tips {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.cafe-error {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+  background: rgba(220, 100, 80, 0.95);
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.cafe-settings {
+  position: absolute;
+  bottom: 60px;
+  right: 16px;
+  background: rgba(255, 248, 230, 0.98);
+  padding: 16px 20px;
+  border-radius: 12px;
+  border: 2px solid #8b6f3f;
+  min-width: 280px;
+  font-size: 13px;
+}
+
+.cafe-settings h3 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+}
+
+.cafe-settings code {
+  background: rgba(60, 40, 20, 0.08);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+}

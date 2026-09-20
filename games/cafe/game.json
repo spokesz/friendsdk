@@ -1,0 +1,32 @@
+{
+  "name": "Rare Friends Café",
+  "consumable": "Cup of coffee",
+  "price": "0",
+  "outcomes": [
+    {
+      "name": "Furious customer",
+      "chanceBps": 500,
+      "reward": "0"
+    },
+    {
+      "name": "Disappointed customer",
+      "chanceBps": 1500,
+      "reward": "100000000000000000"
+    },
+    {
+      "name": "Satisfied customer",
+      "chanceBps": 4000,
+      "reward": "300000000000000000"
+    },
+    {
+      "name": "Happy customer",
+      "chanceBps": 3000,
+      "reward": "500000000000000000"
+    },
+    {
+      "name": "Delighted customer",
+      "chanceBps": 1000,
+      "reward": "1000000000000000000"
+    }
+  ]
+}
