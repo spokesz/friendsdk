@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Rare Friends Cafe - Demo Mode (no wallet required)</title>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(180deg, #fdf6e3 0%, #f5e6c8 100%);
+      color: #3b2a1a; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+    .banner { background: #fffae0; border: 2px solid #f5b800; border-radius: 8px; padding: 12px 20px;
+      margin-bottom: 20px; max-width: 640px; text-align: center; }
+    .banner strong { color: #8b5a00; }
+    .stage { width: 100%; max-width: 640px; background: white; border-radius: 12px; padding: 20px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    h1 { margin: 0 0 8px 0; }
+    .subtitle { color: #8b6f47; margin-bottom: 16px; }
+    .friend-card { background: #fff5e0; border-radius: 8px; padding: 12px; margin: 12px 0;
+      display: flex; align-items: center; gap: 16px; }
+    .friend-avatar { font-size: 48px; }
+    .friend-info { flex: 1; }
+    .skill-badge { display: inline-block; padding: 4px 8px; background: #8b5a00; color: white;
+      border-radius: 4px; font-size: 12px; font-weight: bold; }
+    button { background: #6b4423; color: white; border: none; padding: 10px 20px;
+      border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: 600; }
+    button:hover { background: #8b5a00; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .drink-menu { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+    .drink-btn { background: #fff5e0; color: #3b2a1a; padding: 8px 12px;
+      border: 2px solid transparent; border-radius: 8px; cursor: pointer; font-size: 14px; }
+    .drink-btn:hover { border-color: #6b4423; }
+    .drink-btn.selected { border-color: #6b4423; background: #f5e6c8; }
+    .stats { display: flex; gap: 20px; margin: 16px 0; font-size: 14px; }
+    .stat { background: #fff5e0; padding: 8px 12px; border-radius: 6px; }
+    .stat-label { color: #8b6f47; font-size: 12px; }
+    .stat-value { font-weight: bold; font-size: 18px; }
+    .customer { background: #f5e6c8; padding: 16px; border-radius: 8px; margin: 16px 0;
+      font-size: 16px; text-align: center; }
+    .reveal { background: #d4edda; border: 2px solid #28a745; padding: 16px; border-radius: 8px;
+      margin: 12px 0; text-align: center; font-size: 18px; font-weight: bold; }
+    .reveal.furious { background: #f8d7da; border-color: #dc3545; }
+    .reveal.disappointed { background: #fff3cd; border-color: #ffc107; }
+    .reveal.happy { background: #d1ecf1; border-color: #17a2b8; }
+    .reveal.delighted { background: #d4edda; border-color: #28a745; }
+    .history { margin-top: 16px; font-size: 12px; color: #8b6f47; }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    <strong>Demo Mode</strong> — playing with a sample Friend (no wallet, no NFT, no live RF).
+    <br>This is a standalone preview of <a href="https://github.com/spokesz/friendsdk/pull/8">Rare Friends Cafe PR #8</a>.
+    <br>Connect Robinhood Wallet on the <a href="./game.html">main preview</a> for the real SDK integration.
+  </div>
+
+  <div class="stage">
+    <h1>☕ Rare Friends Café</h1>
+    <div class="subtitle">Demo Mode — Barista: Sample Friend (off-chain)</div>
+
+    <div class="friend-card">
+      <div class="friend-avatar">🧑‍🍳</div>
+      <div class="friend-info">
+        <div><strong>Sample Barista</strong> <span class="skill-badge">Skill 85 — Master Barista</span></div>
+        <div style="font-size: 12px; color: #8b6f47;">Mock Friend ID: #7730 (generation 1)</div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">Beans</div>
+        <div class="stat-value" id="beans">20</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Tips (RF)</div>
+        <div class="stat-value" id="tips">0.00</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Shift</div>
+        <div class="stat-value"><span id="customers-served">0</span>/5</div>
+      </div>
+    </div>
+
+    <div id="game-area">
+      <p style="text-align: center; color: #8b6f47;">Press <strong>Open Shop</strong> to start the shift.</p>
+    </div>
+
+    <div style="text-align: center; margin-top: 16px;">
+      <button id="open-btn" onclick="openShop()">Open Shop</button>
+    </div>
+
+    <div class="history" id="history"></div>
+  </div>
+
+<script>
+const DRINKS = [
+  { id: 'espresso',    name: 'Espresso',       beans: 1, baseTip: 0.20, icon: '☕' },
+  { id: 'latte',       name: 'Latte',          beans: 2, baseTip: 0.50, icon: '🥛' },
+  { id: 'cappuccino',  name: 'Cappuccino',     beans: 3, baseTip: 0.80, icon: '☕' },
+  { id: 'mocha',       name: 'Mocha',          beans: 4, baseTip: 1.50, icon: '🍫' },
+  { id: 'specialty',   name: 'Daily Special',  beans: 5, baseTip: 2.50, icon: '✨' },
+];
+
+const TIERS = [
+  { name: 'Furious',      prob: 0.05, multiplier: 0.00, cls: 'furious' },
+  { name: 'Disappointed', prob: 0.15, multiplier: 0.20, cls: 'disappointed' },
+  { name: 'Satisfied',    prob: 0.40, multiplier: 0.50, cls: 'satisfied' },
+  { name: 'Happy',        prob: 0.30, multiplier: 1.00, cls: 'happy' },
+  { name: 'Delighted',    prob: 0.10, multiplier: 2.00, cls: 'delighted' },
+];
+
+const SKILL = 85;  // Master Barista
+let beans = 20;
+let tips = 0;
+let customersServed = 0;
+let currentOrder = null;
+const history = [];
+
+function rollTier() {
+  const r = Math.random();
+  let acc = 0;
+  for (const tier of TIERS) {
+    acc += tier.prob;
+    if (r < acc) return tier;
+  }
+  return TIERS[TIERS.length - 1];
+}
+
+function randomDrink() {
+  return DRINKS[Math.floor(Math.random() * DRINKS.length)];
+}
+
+function openShop() {
+  if (customersServed >= 5) {
+    alert('Shift complete! Refresh to play again.');
+    return;
+  }
+  currentOrder = randomDrink();
+  const area = document.getElementById('game-area');
+  const menuHtml = DRINKS.map(d =>
+    `<button class="drink-btn ${d.id === currentOrder.id ? 'selected' : ''}" disabled>${d.icon} ${d.name}</button>`
+  ).join('');
+  area.innerHTML = `
+    <div class="customer">A customer walks in and orders: <strong>${currentOrder.icon} ${currentOrder.name}</strong> (${currentOrder.beans} beans, ${currentOrder.baseTip.toFixed(2)} RF base)</div>
+    <p style="text-align:center;color:#8b6f47;">Choose which drink to serve:</p>
+    <div class="drink-menu">${menuHtml}</div>
+    <p style="text-align:center;color:#8b6f47;">(In live mode, you'd select the matching drink; here we auto-serve the order.)</p>
+    <div style="text-align:center;">
+      <button onclick="brew()">Brew ${currentOrder.name}</button>
+    </div>
+  `;
+  document.getElementById('open-btn').disabled = true;
+}
+
+function brew() {
+  if (!currentOrder) return;
+  if (beans < currentOrder.beans) {
+    alert('Not enough beans! Refresh to reset.');
+    return;
+  }
+  beans -= currentOrder.beans;
+  const tier = rollTier();
+  const skillBonus = 1 + (SKILL / 500);
+  const earned = currentOrder.baseTip * tier.multiplier * skillBonus;
+
+  const area = document.getElementById('game-area');
+  area.innerHTML = `
+    <div class="reveal ${tier.cls}">${tier.name.toUpperCase()}! +${earned.toFixed(3)} RF</div>
+    <div class="customer">You served ${currentOrder.icon} ${currentOrder.name}.</div>
+  `;
+
+  tips += earned;
+  customersServed++;
+  history.unshift(`${currentOrder.name} → ${tier.name} (+${earned.toFixed(3)} RF)`);
+  currentOrder = null;
+
+  document.getElementById('beans').textContent = beans;
+  document.getElementById('tips').textContent = tips.toFixed(3);
+  document.getElementById('customers-served').textContent = customersServed;
+  document.getElementById('history').innerHTML = history.length
+    ? '<strong>Shift log:</strong><br>' + history.join('<br>')
+    : '';
+  document.getElementById('open-btn').disabled = false;
+  document.getElementById('open-btn').textContent = customersServed >= 5 ? 'Shift Complete' : 'Next Customer';
+
+  if (customersServed >= 5) {
+    setTimeout(() => {
+      alert(`Shift complete! Total tips: ${tips.toFixed(3)} RF (with skill ${SKILL})`);
+    }, 1000);
+  }
+}
+</script>
+</body>
+</html>
