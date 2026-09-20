@@ -19,18 +19,20 @@ You run a coffee shop staffed by your Rare Friend NFT. The Friend's token ID det
 
 ### 1. Offline demo (no wallet, no NFT) -- **recommended for first try**
 
-**http://43.156.175.175/cafe/demo.html**
+**https://rocky-motivation-sussex-influence.trycloudflare.com/cafe/demo.html**
 
 A standalone HTML preview that runs the full cafe game loop with a sample Friend (token ID 7730, skill 85, generation 1). Anyone can play -- no browser extension, no NFT, no RF. This uses the same game balance and satisfaction tier table as the SDK version, so reviewers can verify the design without setup.
 
 ### 2. Live SDK preview (Robinhood Wallet + Generations NFT required)
 
-**http://43.156.175.175/cafe/** (or `./game.html`)
+**https://rocky-motivation-sussex-influence.trycloudflare.com/cafe/** (or `./game.html`)
 
 The SDK v0.1.2 preview deployment reads your Friend data from Robinhood mainnet (chainId 4663) via the SDK's hardwired NFT ownership gate. To play:
 
 1. Install [Robinhood Wallet](https://robinhood.com/us/en/crypto/wallet/) browser extension, and
 2. Hold a Generations NFT in the connected wallet (gen 1+).
+
+> **HTTPS required.** The URL above is HTTPS via Cloudflare Tunnel -- necessary because Robinhood Wallet and other EIP-1193 providers only inject into secure contexts. HTTP URLs will not work for the live preview.
 
 Preview rolls are simulated; no RF is actually spent or earned. No live contract is bound to this preview.
 
@@ -43,8 +45,8 @@ Preview rolls are simulated; no RF is actually spent or earned. No live contract
 | Contact | GitHub [@wudong6120415](https://github.com/wudong6120415) |
 | Category | Character Spotlight |
 | Submission path | `submissions/rare-friends-cafe/` |
-| **Offline demo (no wallet)** | http://43.156.175.175/cafe/demo.html |
-| **Live SDK preview (wallet + NFT)** | http://43.156.175.175/cafe/ |
+| **Offline demo (no wallet)** | https://rocky-motivation-sussex-influence.trycloudflare.com/cafe/demo.html |
+| **Live SDK preview (wallet + NFT)** | https://rocky-motivation-sussex-influence.trycloudflare.com/cafe/ |
 | SDK | FriendSDK v0.1.2 |
 | Deadline | September 30, 2026 |
 
@@ -141,12 +143,12 @@ Open the displayed URL (normally `http://localhost:4173`), connect your Robinhoo
 - `npm run typecheck` passes
 - `npm run build` passes
 - `npm run dev:game` boots at `localhost:4173`
-- Offline demo at `http://43.156.175.175/cafe/demo.html` (no wallet required)
-- Live SDK preview at `http://43.156.175.175/cafe/`
+- Offline demo at `https://rocky-motivation-sussex-influence.trycloudflare.com/cafe/demo.html` (no wallet required)
+- Live SDK preview at `https://rocky-motivation-sussex-influence.trycloudflare.com/cafe/`
 
 ## Known limitations
 
-- The offline demo (`demo.html`) is a simplified client-side version of the same loop. The live SDK preview (`game.html`) requires Robinhood Wallet + a Generations NFT.
+- The offline demo (`demo.html`) is a simplified client-side version of the same loop. The live SDK preview (`game.html`) requires Robinhood Wallet + a Generations NFT + HTTPS context.
 - Robinhood mainnet RPC may rate-limit under heavy load.
 - Drink art is AI-generated and may benefit from manual refinement.
 - No multi-customer queueing (one customer at a time, by design).
