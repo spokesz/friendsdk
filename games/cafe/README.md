@@ -24,6 +24,7 @@ You run a coffee shop staffed by your Rare Friend NFT. The Friend's token ID det
 | Contact | GitHub [@wudong6120415](https://github.com/wudong6120415) |
 | Category | Character Spotlight |
 | Submission path | `submissions/rare-friends-cafe/` |
+| **Public playable preview** | http://43.156.175.175/cafe/ (open in browser, click Connect wallet) |
 | SDK | FriendSDK v0.1 |
 | Deadline | September 30, 2026 |
 
