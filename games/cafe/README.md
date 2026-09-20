@@ -15,15 +15,24 @@ You run a coffee shop staffed by your Rare Friend NFT. The Friend's token ID det
 - Friend skill adds a bonus to every tip (skill 1-100 -> +0% to +20% tip)
 - Tips = simulated RF earnings; spend beans (1 RF equivalent per bean) to keep brewing
 
-## Playable preview (live demo)
+## Two ways to play
 
-**http://43.156.175.175/cafe/**
+### 1. Offline demo (no wallet, no NFT) -- **recommended for first try**
 
-> Important: this is a **preview deployment**. The game reads your friend's data from Robinhood mainnet (chainId 4663) via the SDK's hardwired NFT ownership gate. To play, you must:
-> 1. Install [Robinhood Wallet](https://robinhood.com/us/en/crypto/wallet/) browser extension, and
-> 2. Hold a Generations NFT in the connected wallet (gen 1+).
->
-> Preview rolls are simulated; no RF is actually spent or earned. No live contract is bound to this preview.
+**http://43.156.175.175/cafe/demo.html**
+
+A standalone HTML preview that runs the full cafe game loop with a sample Friend (token ID 7730, skill 85, generation 1). Anyone can play -- no browser extension, no NFT, no RF. This uses the same game balance and satisfaction tier table as the SDK version, so reviewers can verify the design without setup.
+
+### 2. Live SDK preview (Robinhood Wallet + Generations NFT required)
+
+**http://43.156.175.175/cafe/** (or `./game.html`)
+
+The SDK v0.1.2 preview deployment reads your Friend data from Robinhood mainnet (chainId 4663) via the SDK's hardwired NFT ownership gate. To play:
+
+1. Install [Robinhood Wallet](https://robinhood.com/us/en/crypto/wallet/) browser extension, and
+2. Hold a Generations NFT in the connected wallet (gen 1+).
+
+Preview rolls are simulated; no RF is actually spent or earned. No live contract is bound to this preview.
 
 ## Project info
 
@@ -34,7 +43,8 @@ You run a coffee shop staffed by your Rare Friend NFT. The Friend's token ID det
 | Contact | GitHub [@wudong6120415](https://github.com/wudong6120415) |
 | Category | Character Spotlight |
 | Submission path | `submissions/rare-friends-cafe/` |
-| **Public playable preview** | http://43.156.175.175/cafe/ (Robinhood Wallet + Generations NFT required) |
+| **Offline demo (no wallet)** | http://43.156.175.175/cafe/demo.html |
+| **Live SDK preview (wallet + NFT)** | http://43.156.175.175/cafe/ |
 | SDK | FriendSDK v0.1.2 |
 | Deadline | September 30, 2026 |
 
@@ -86,6 +96,7 @@ Every Friend has a unique skill. The cafe tells you who they are before you star
 | `index.tsx` | Main game component: HUD, customer queue, brewing, reveal |
 | `game.json` | Outcome table: 5 satisfaction tiers + weights |
 | `style.css` | Cafe-themed UI: warm browns, cream backgrounds, barista avatar |
+| `demo.html` | Standalone offline preview (no wallet required) |
 | `media/cafe-bg.jpg` | Cafe interior background (AI-generated) |
 | `media/espresso.jpg` | Espresso cup art |
 | `media/latte.jpg` | Latte glass art |
@@ -102,7 +113,7 @@ Every Friend has a unique skill. The cafe tells you who they are before you star
 - Node.js 22+
 - npm
 - Git
-- Robinhood mainnet wallet holding a Generations NFT (gen 1+) -- even in preview mode
+- Robinhood mainnet wallet holding a Generations NFT (gen 1+) -- only for the SDK preview, not for the offline demo
 
 ### Setup
 
@@ -130,11 +141,12 @@ Open the displayed URL (normally `http://localhost:4173`), connect your Robinhoo
 - `npm run typecheck` passes
 - `npm run build` passes
 - `npm run dev:game` boots at `localhost:4173`
-- Preview deployed at `http://43.156.175.175/cafe/` (live demo)
+- Offline demo at `http://43.156.175.175/cafe/demo.html` (no wallet required)
+- Live SDK preview at `http://43.156.175.175/cafe/`
 
 ## Known limitations
 
-- Preview deployment reads wallet and NFT data on-chain; users need Robinhood Wallet + a Generations NFT to play, even in preview. There is no offline or mock mode in this MVP.
+- The offline demo (`demo.html`) is a simplified client-side version of the same loop. The live SDK preview (`game.html`) requires Robinhood Wallet + a Generations NFT.
 - Robinhood mainnet RPC may rate-limit under heavy load.
 - Drink art is AI-generated and may benefit from manual refinement.
 - No multi-customer queueing (one customer at a time, by design).
@@ -148,7 +160,7 @@ Open the displayed URL (normally `http://localhost:4173`), connect your Robinhoo
 - **Barista outfits**: Friend appearance changes based on tip earnings tier
 - **Customer memory**: regulars remember you (NPC state)
 - **Live mode**: spend real RF on beans, settle real tips via SDK Dice
-- **Offline preview**: let reviewers play without a wallet by faking a Friend sprite
+- **Multi-customer queue**: serve 2-3 customers in parallel
 
 ## Credits
 
