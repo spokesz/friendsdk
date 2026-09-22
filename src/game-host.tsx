@@ -21,8 +21,8 @@ export type GameHostProps = {
   frameUrl: string;
   /** Explicit live deployment; omit for simulated gameplay. */
   deployment?: LiveGameDeployment;
-  /** Rules from the game's server.ts. They run in this browser unless `backend` names a Nakama server. */
-  server?: FriendGameServer;
+  /** Rules from the game's server.ts. They run in this browser unless `backend` names a Nakama server, where only the id is needed. */
+  server?: FriendGameServer | Readonly<{ id: string }>;
   /** Nakama address for the game server. Requires `server` and a wallet that can sign messages. */
   backend?: NakamaBackend;
   /** Optional browser wallet already used by this project. */
@@ -118,7 +118,7 @@ export type ConnectedGameHostProps = {
   /** Change when a supplied connection invalidates identity. */
   revision?: number;
   deployment?: LiveGameDeployment;
-  server?: FriendGameServer;
+  server?: FriendGameServer | Readonly<{ id: string }>;
   backend?: NakamaBackend;
   /** Required with a deployment (transactions) or a backend (sign-in message). Stays in the trusted runtime. */
   walletClient?: ChanceWalletClient & Partial<Pick<WalletClient, "signMessage">>;
@@ -148,7 +148,7 @@ function EligibilityGate({ definition, picker, friend, account, chainId, publicC
   friend: GameFriend; account: string; chainId: number; publicClient: GenerationIdentityClient; frameUrl: string;
   ledgers: Map<string, PreviewGameClient>; backends: Map<string, GameBackend>;
   deployment?: LiveGameDeployment; walletClient?: ConnectedGameHostProps["walletClient"]; assertActive?: () => void;
-  server?: FriendGameServer; backend?: NakamaBackend;
+  server?: ConnectedGameHostProps["server"]; backend?: NakamaBackend;
 }) {
   const [attempt, setAttempt] = useState(0);
   const [verification, setVerification] = useState<{ client: GenerationIdentityClient; eligible: boolean; walletAddress?: string; error?: string } | null>(null);
@@ -195,7 +195,7 @@ function EligibilityGate({ definition, picker, friend, account, chainId, publicC
       const signer = walletClient;
       gameBackend.current = createNakamaGameBackend({ backend, gameId: server.id, friend: identity, account,
         signMessage: message => signer.signMessage!({ account: account as Address, message }) });
-    } else {
+    } else if ("rpcs" in server) {
       let local = backends.get(ledgerKey);
       if (!local) { local = createLocalGameBackend(server, { ...identity, controller: account }); backends.set(ledgerKey, local); }
       gameBackend.current = local;
