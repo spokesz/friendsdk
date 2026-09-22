@@ -29,15 +29,18 @@ export default function GardenPacks({ friendId, client, paused }: GameComponentP
   const [result, setResult] = useState<GamePlay | null>(null), [busy, setBusy] = useState(false);
   const [error, setError] = useState(""), [message, setMessage] = useState("");
   const [muted, setMuted] = useState(true), [reducedMotion, setReducedMotion] = useState(false);
+  const [visits, setVisits] = useState<number | null>(null);
   const sound = useRef<FriendSoundKit | null>(null), locked = useRef(false), epoch = useRef(0);
   const definition = client.definition;
   useEffect(() => {
     const version = ++epoch.current;
     sound.current = createFriendSoundKit({ muted: true });
-    setSnapshot(null); setMenu(null); setResult(null); setError(""); setMessage(""); setBusy(false); setMuted(true); locked.current = false;
+    setSnapshot(null); setMenu(null); setResult(null); setError(""); setMessage(""); setBusy(false); setMuted(true); setVisits(null); locked.current = false;
     void client.read().then(value => { if (version === epoch.current) setSnapshot(value); }).catch(cause => {
       if (version === epoch.current) setError(cause instanceof Error ? cause.message : "Could not load the preview.");
     });
+    // The game server rule in server.ts counts this Friend's visits; see API.md#game-server.
+    void client.rpc("visit").then(value => { if (version === epoch.current) setVisits((value as { count: number }).count); }).catch(() => {});
     const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
     const update = () => setReducedMotion(preference.matches); update(); preference.addEventListener("change", update);
     return () => { epoch.current++; sound.current?.dispose(); sound.current = null; preference.removeEventListener("change", update); };
@@ -69,7 +72,7 @@ export default function GardenPacks({ friendId, client, paused }: GameComponentP
     <div className="starter-world" inert={Boolean(menu) || paused || undefined}>
       <GameWorld world={world} spawn={spawn} interactions={interactions} friendId={friendId} paused={Boolean(menu) || paused} reducedMotion={reducedMotion}
         onInteract={id => navigate(id === "buy" ? "buy" : "open")} />
-      <div className="starter-hud"><span>Preview · {rf(snapshot.rfBalance)} · {snapshot.consumables.toString()} packs</span>
+      <div className="starter-hud"><span>Preview · {rf(snapshot.rfBalance)} · {snapshot.consumables.toString()} packs{visits !== null && ` · visit ${visits}`}</span>
         <button type="button" onClick={() => navigate("inventory")}>Inventory · {count.toString()}</button>
         <button type="button" onClick={() => navigate("settings")}>Settings</button></div>
       <p className="starter-hint"><span className="starter-desktop-hint">WASD / arrows to walk · Tap a destination · E near an activity</span><span className="starter-mobile-hint">Tap to walk · E / tap near a station</span></p>

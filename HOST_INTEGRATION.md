@@ -73,7 +73,12 @@ included only when explicitly requested.
 | `npx friendsdk test ./games/my-game` | Runs a headless browser smoke check using mock wallet/RPC/sprites. Add `--screenshot ./artifacts/game.png` or `--width 360`. Requires Playwright and Chromium. |
 
 `.friendsdk/` contains generated output. Edit `index.tsx`, `game.json`, optional
-`host.css` and assets, then rebuild; exclude generated output from source control.
+`host.css`, optional `server.ts` and assets, then rebuild; exclude generated output
+from source control. A game with `server.ts` also produces `server.js`, the Nakama
+runtime module for that game. When `NAKAMA_HOST` (with optional `NAKAMA_PORT`,
+`NAKAMA_SSL=true` and `NAKAMA_SERVER_KEY`) is set while building or running `dev`,
+the runtime sends the game's server actions to that Nakama instead of running them
+in the browser. See [the game server](API.md#game-server).
 
 Use `friendsdk --help` for options. Supported Node imports are
 `@rarefriends/friendsdk/build`, `/serve` and `/testing`; see
@@ -174,6 +179,14 @@ changing the other context values. For live mode, also supply `deployment`, a
 configured `walletClient`, a public client supporting live reads, and an
 `assertActive` callback that rejects invalidated connections before wallet prompts.
 
+Both components accept `server`, the game's `server.ts` module, and `backend`, a
+Nakama address `{ host, port, useSSL, serverKey }`. With `server` alone the rules
+run in the browser and state lasts for the page session. With `backend` the host
+signs the selected Friend in (one wallet signature per hour, `personal_sign`, no
+transaction) and forwards `client.rpc` calls to Nakama; supply a `walletClient`
+that can `signMessage`. The CLI passes both from the game directory and the
+`NAKAMA_*` environment.
+
 For custom child builds, `GameSession` renders a callback with the verified
 `GameComponentProps` and handles the SDK handshake:
 
@@ -269,8 +282,9 @@ For a custom mount, serve the same child files under the configured `frameUrl`.
 The iframe uses `sandbox="allow-scripts"` without same-origin, popup, form or
 navigation permissions.
 
-The opaque sandbox cannot use `localStorage` or IndexedDB. The bridge has no save
-API, and simulated ledgers are session-local; a reload starts fresh. The frame's
+The opaque sandbox cannot use `localStorage` or IndexedDB. Durable progress goes
+through `client.rpc` to the game's server rules; simulated RF ledgers are
+session-local and a reload starts them fresh. The frame's
 toolbar overlays the bottom-left and menu button overlays the bottom-right, so
 leave space for those controls when placing HUD elements. Its default 3:2 aspect ratio
 makes a 360-pixel-wide frame about 240 pixels tall; check text and touch targets
@@ -278,9 +292,10 @@ at that size. See [practical details](README.md#larger-worlds-and-practical-deta
 
 Only the exact child window receives a private `MessagePort`; the child accepts
 initialization from its parent. The bridge exposes `read`, `canBuy`, `buy`, `play`,
-`settle` and `redeem`, with action quantities 1–99. The runtime obtains in-frame
-confirmation for buy, play and redeem, plus live settlement. Wallet prompts
-authorize each live transaction. Game input pauses while menus are open.
+`settle` and `redeem`, with action quantities 1–99, plus `rpc(name, payload)` for
+the game's own server rules. The runtime obtains in-frame confirmation for buy,
+play and redeem, plus live settlement; `rpc` calls carry no wallet prompt and
+their payloads are JSON up to 16 KiB. Game input pauses while menus are open.
 Community code cannot access parent-page UI, a signer, arbitrary calldata,
 deployment or bankroll withdrawals.
 
@@ -292,7 +307,7 @@ The current client implements the supplied
 chance-game economy; other mechanics may need custom integration. Missing APIs
 below describe implementation work, not restrictions on submission ideas.
 
-| Capability | Implemented in SDK v0.1.2 | Limits or future work |
+| Capability | Implemented in SDK v0.2.0 | Limits or future work |
 | --- | --- | --- |
 | Generic game runtime | Directory runner, `GameHost`, `ConnectedGameHost`, `GameSession`, customizable frame and sandbox bridge. | 960 × 640 is the reference layout. Existing renderers/build tools can use a thin React adapter. |
 | Wallet connection | EIP-6963/injected EIP-1193 browser wallets and account/network lifecycle. | WalletConnect and native-wallet deep links are not supplied. Connection grants no transaction permission. |
@@ -301,9 +316,10 @@ below describe implementation work, not restrictions on submission ideas.
 | Optional world tools | `GameWorld`, world presets, scenery, movement and collision utilities; scrolling-world example. | Creators may supply their own assets, rendering, visual style and camera. The viewport does not limit world dimensions. |
 | Build and test tools | CLI init/dev/build/check/test and supported Node build/serve/testing imports. | Headless mock tests require Playwright; playable previews require a real eligible wallet. |
 | Game UI and characters | Optional Friend sprites, SDK menus, HUD, inventory panels, reveals, sound and reduced motion. | Choose character rendering, UI and genre-appropriate accessible controls; keep game actions and confirmations inside the frame. |
-| Simulated actions | `read`, `canBuy`, `buy`, `play`, `settle`, `redeem`; RF balances, consumables, rewards and reservation accounting. | Preview state is session-local and resets on reload. No save bridge is supplied. |
+| Simulated actions | `read`, `canBuy`, `buy`, `play`, `settle`, `redeem`; RF balances, consumables, rewards and reservation accounting. | Simulated RF ledgers are session-local and reset on reload. |
+| Game server | `server.ts` rules run per Friend through `client.rpc`; in-browser for previews and tests, on Nakama in production with wallet sign-in bound to current NFT ownership and Friend-scoped storage that only server rules write. | Handlers are synchronous JSON rules; no real-time matches, leaderboards or player-to-player messaging are exposed yet. Ownership is rechecked at each sign-in (default session 15 minutes). |
 | Consumable mechanics | One configured consumable with a fixed weighted outcome table and exact RF values. | Multiple consumable tiers and arbitrary pack/NFT minting APIs are not implemented. |
-| Other item and currency mechanics | Durable items, cosmetics, perks/upgrades and additional currencies are welcome when backed by or integrated with RF. | No general upgrade or additional-currency actions are supplied; persistent progress and these actions need custom integration. |
+| Other item and currency mechanics | Durable items, cosmetics, perks/upgrades and additional currencies are welcome when backed by or integrated with RF, implemented as game server rules. | Off-chain items live in the game server's Friend-scoped storage; on-chain custody still needs the contract phase. |
 | Vendor redemption | Fixed-value redemption, kept-reward backing and no expiry. | Player-to-player trading is not implemented. |
 | Live contract actions | `createLiveGameClient` and the bridge support buy/play/settle/redeem; exact RF approval, a selected canonical wallet, contract-enforced ownership and receipt/event verification. | Requires an explicit deployment, owning wallet, RF and ETH gas. |
 | Friend wallet RF transfer | Trusted in-frame control transfers an entered amount from the connected account to the verified canonical NFT wallet. | Separate wallet-confirmed transaction; unavailable to sandboxed game code. |

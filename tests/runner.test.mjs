@@ -88,7 +88,8 @@ test('builds reject project roots and mixed directories, but upgrade clean legac
     await build.close(); build = undefined;
     await rm(join(outdir, '.friendsdk-output.json'));
     build = await buildGame(source, { outdir });
-    assert.equal(JSON.parse(await readFile(join(outdir, '.friendsdk-output.json'), 'utf8')).files.length, 8);
+    // Eight runtime documents plus server.js from the starter's server.ts.
+    assert.equal(JSON.parse(await readFile(join(outdir, '.friendsdk-output.json'), 'utf8')).files.length, 9);
   } finally { await build?.close(); await rm(directory, { recursive: true, force: true }); }
 });
 

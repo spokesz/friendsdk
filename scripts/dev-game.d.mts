@@ -12,3 +12,6 @@ export function createGameServer(outdir: string): Server;
 export function readGameDeployment(input: unknown): Promise<Readonly<{
   chainId: number; game: string; rf: string; generations: string; entropy: string; provider: string; deploymentBlock: string;
 }>>;
+
+/** Game server address from NAKAMA_HOST, NAKAMA_PORT, NAKAMA_SSL and NAKAMA_SERVER_KEY; undefined when unset. */
+export function readGameBackend(env?: Record<string, string | undefined>): Readonly<{ host: string; port: number; useSSL: boolean; serverKey: string }> | undefined;

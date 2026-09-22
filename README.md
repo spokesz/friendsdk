@@ -298,12 +298,12 @@ also needs [LAN networking configuration](https://learn.microsoft.com/en-us/wind
 
 ## Install in an existing project
 
-Download `rarefriends-friendsdk-0.1.2.tgz` from the
-[v0.1.2 GitHub release](https://github.com/spokesz/friendsdk/releases/tag/v0.1.2)
+Download `rarefriends-friendsdk-0.2.0.tgz` from the
+[v0.2.0 GitHub release](https://github.com/spokesz/friendsdk/releases/tag/v0.2.0)
 into your existing project, then run there:
 
 ```sh
-npm install ./rarefriends-friendsdk-0.1.2.tgz react react-dom
+npm install ./rarefriends-friendsdk-0.2.0.tgz react react-dom
 npx friendsdk init ./games/my-game
 npx friendsdk dev ./games/my-game
 ```
@@ -331,6 +331,22 @@ runtime/sandbox requirements. The current runtime still accepts a
 The SDK is distributed as a package archive. Publication to the npm registry
 is not planned. Source code uses [Apache-2.0](LICENSE); artwork
 permissions are separate. See [NOTICE.md](NOTICE.md).
+
+### Save progress with a game server
+
+Rules in `games/my-game/server.ts` run on a game server and keep durable progress
+per Friend: money, items, upgrades, timers. The game calls them with
+`client.rpc(name, payload)`; the same rules run in the browser during `dev`,
+`build` previews and `test`, so nothing changes in your workflow until you point
+at a real server:
+
+```sh
+NAKAMA_HOST=127.0.0.1 NAKAMA_PORT=7350 npx friendsdk dev ./games/my-game
+```
+
+The starter includes a one-rule example, `friendsdk build` also writes
+`.friendsdk/server.js` for Nakama, and the runtime signs the selected Friend in
+with one wallet signature. See [the game server API](API.md#game-server).
 
 ### Check your game without a wallet
 

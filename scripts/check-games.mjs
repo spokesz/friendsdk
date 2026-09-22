@@ -33,6 +33,23 @@ export async function checkGame(path) {
       throw new Error(`${path}: wallet transport belongs to the host, not the game frame`);
     }
   }
+  // An optional game server compiles for Nakama's JavaScript runtime: no DOM, no Node.
+  let server = '';
+  try {
+    await access(resolve(directory, 'server.ts'));
+    const module = await build({ absWorkingDir: root, entryPoints: [resolve(directory, 'server.ts')], bundle: true,
+      platform: 'browser', format: 'cjs', target: 'es2020', write: false, outdir: 'unused', metafile: true,
+      plugins: [{ name: 'sdk', setup(builder) {
+        builder.onResolve({ filter: /^@rarefriends\/friendsdk(?:\/|$)/ }, args => {
+          const name = args.path.replace('@rarefriends/friendsdk', '.') || '.';
+          const entry = packageJson.exports[name];
+          if (!entry) return { errors: [{ text: `Unknown SDK export: ${args.path}` }] };
+          return { path: resolve(root, typeof entry === 'string' ? entry : entry.import) };
+        });
+      } }] });
+    Object.assign(result.metafile.inputs, module.metafile.inputs);
+    server = `; server ${module.outputFiles.reduce((n, file) => n + file.contents.length, 0)} bytes`;
+  } catch (error) { if (error.code !== 'ENOENT') throw error; }
   // Submissions cannot silently pull private platform files into their build.
   for (const source of Object.keys(result.metafile.inputs)) {
     const full = resolve(root, source), local = relative(directory, full);
@@ -42,7 +59,7 @@ export async function checkGame(path) {
     if (full.split(sep).includes('node_modules')) continue;
     throw new Error(`${path}: undeclared source outside the game/SDK: ${source}`);
   }
-  return `${path}: valid; expected reward ${expectedReward(game)}; maximum ${maximumPrize(game)} RF base units; build ${result.outputFiles.reduce((n, file) => n + file.contents.length, 0)} bytes`;
+  return `${path}: valid; expected reward ${expectedReward(game)}; maximum ${maximumPrize(game)} RF base units; build ${result.outputFiles.reduce((n, file) => n + file.contents.length, 0)} bytes${server}`;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(await realpath(process.argv[1])).href) {

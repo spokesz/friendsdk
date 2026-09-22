@@ -24,6 +24,9 @@ export type GameClient = Readonly<{
 
 export type PreviewGameClient = GameClient & Readonly<{ mode: 'preview' }>;
 
+/** Game server actions defined in the game's server.ts; the host routes them to Nakama or a local preview. */
+export type GameServerClient = Readonly<{ rpc(name: string, payload?: unknown): Promise<unknown> }>;
+
 function uint(value: bigint, name: string, positive = false): bigint {
   if (typeof value !== 'bigint' || value < (positive ? 1n : 0n) || value > UINT256_MAX) throw new RangeError(`Invalid ${name}.`);
   return value;

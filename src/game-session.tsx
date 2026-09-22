@@ -2,9 +2,9 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { createFrameGameClient } from "./frame-bridge.js";
-import type { ChanceGameDefinition, GameClient } from "./game.js";
+import type { ChanceGameDefinition, GameClient, GameServerClient } from "./game.js";
 
-export type GameComponentProps = Readonly<{ friendId: bigint; client: GameClient; paused: boolean }>;
+export type GameComponentProps = Readonly<{ friendId: bigint; client: GameClient & GameServerClient; paused: boolean }>;
 
 /** Game-side bridge. The runtime supplies one verified Friend and a fixed action client. */
 export function GameSession({ definition, children }: {

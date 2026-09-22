@@ -1,6 +1,6 @@
 # FriendSDK API
 
-SDK **v0.1.2** exports browser ESM and TypeScript declarations. Import modules from
+SDK **v0.2.0** exports browser ESM and TypeScript declarations. Import modules from
 `@rarefriends/friendsdk/<module>`. Build with Node.js 22+ using `npm ci` and
 `npm run build`.
 
@@ -13,14 +13,16 @@ assets. Default-export a React component accepting `GameComponentProps` from
 ```ts
 export type GameComponentProps = Readonly<{
   friendId: bigint;
-  client: GameClient;
+  client: GameClient & GameServerClient;
   paused: boolean;
 }>;
 ```
 
 `friendId` is the selected, freshly verified Generations NFT. `client` exposes
 only supported game actions. `client.mode` and `GameSnapshot.mode` are `"preview"`
-or `"chain"`; use them to label balances and outcomes. Pause gameplay interactions
+or `"chain"`; use them to label balances and outcomes. `client.rpc(name, payload?)`
+calls a rule from the game's own `server.ts` and resolves with its JSON result;
+see [the game server](#game-server). Pause gameplay interactions
 while `paused` is true. Choose controls and UI for your genre and target devices.
 The walkable world and menus in the starter are reference designs.
 
@@ -88,7 +90,9 @@ confirmations in the runtime. See [layout examples](HOST_INTEGRATION.md#react-ru
 
 | Module | Exports and use |
 | --- | --- |
-| `runtime` | `GameHost`, `ConnectedGameHost`, `GameSession`, `GameComponentProps`, `createLiveGameClient`, `LiveGameDeployment`, `LIVE_GAME_MAX_ORACLE_FEE`. Preview/live runtime and child session. |
+| `runtime` | `GameHost`, `ConnectedGameHost`, `GameSession`, `GameComponentProps`, `GameServerClient`, `createNakamaGameBackend`, `NakamaBackend`, `createLiveGameClient`, `LiveGameDeployment`, `LIVE_GAME_MAX_ORACLE_FEE`. Preview/live runtime, game server connection and child session. |
+| `server` | `defineFriendGameServer`, `FriendRpcError`, `FriendRpcContext`, `FriendStorage`, `FriendIdentity`, `createLocalGameBackend`, `friendCustomId`, `friendLoginMessage`, `parseFriendLogin`. Game rules that run in the browser preview and on Nakama. |
+| `server/nakama` | `beforeAuthenticateCustom`, `callFriendRpc`, `verifyFriendLogin`, `recoverSigner`, `readFriendOnChain`. Nakama runtime adapter; bundled by the CLI, never imported by browser code. |
 | `world-view` | Optional `GameWorld` utility with canonical Friend sprites and keyboard/touch movement. Import `world-view.css` when using it. |
 | `world` | Optional world utilities: `WORLD_PRESETS`, `getWorldPreset`, `validateWorld`, `renderWorld`, `renderWorldLayers`, `renderProp`, `project`, `unproject`, `isWorldWalkable`. Geometry, props, collision and depth sorting. |
 | `navigation` | `createWorldNavigator(world, radius?, spacing?)`: collision-checked `route(from, to)` and `segmentClear(from, to)`. |
@@ -126,7 +130,7 @@ These supported exports run in Node.js 22+, outside the game sandbox:
 
 | Module | API |
 | --- | --- |
-| `@rarefriends/friendsdk/build` | `buildGame(gameDirectory, { outdir?, watch?, deployment? })`, `readGameDeployment(input)` |
+| `@rarefriends/friendsdk/build` | `buildGame(gameDirectory, { outdir?, watch?, deployment? })`, `readGameDeployment(input)`, `readGameBackend(env?)` (the `NAKAMA_*` variables `buildGame` bakes into the runtime) |
 | `@rarefriends/friendsdk/serve` | `createGameServer(outdir)` |
 | `@rarefriends/friendsdk/testing` | `testGame(gameDirectory, options?)` |
 
@@ -339,6 +343,53 @@ subsidize RNG costs for **all developers** to improve the user experience and
 reduce costs. The demo does not implement this subsidy; it demonstrates
 wallet-paid RNG. Pending casts reuse their existing request.
 
+## Game server
+
+A game keeps durable, rule-checked progress by adding `server.ts` next to
+`index.tsx`. It default-exports rules that receive JSON and return JSON:
+
+```ts
+import { defineFriendGameServer, FriendRpcError } from "@rarefriends/friendsdk/server";
+
+type Visits = { count: number; lastAt: number };
+
+export default defineFriendGameServer({ id: "garden-packs", rpcs: {
+  visit(ctx) {
+    const record = ctx.storage.get<Visits>("visits");
+    const visits = { count: (record?.value.count ?? 0) + 1, lastAt: ctx.now };
+    ctx.storage.put("visits", visits, record?.version ?? "*");
+    return visits;
+  },
+} });
+```
+
+`ctx.friend` is `{ chainId, contract, tokenId, controller }`: the Friend is the
+account and `controller` is the wallet that proved ownership at sign-in. `ctx.now`
+is server time in milliseconds. `ctx.storage` holds JSON objects private to this
+Friend and this game: `get(key)` returns `{ value, version } | null` and
+`put(key, value, version?)` writes; pass the version you read to refuse a
+concurrent write, `"*"` to require a new key, or nothing to overwrite. Throw
+`FriendRpcError("message")` for a rule the player should read; any other error
+becomes `"Game server error."` and stays in server logs. Handlers are synchronous
+and run in Nakama's ES2020 JavaScript runtime: no DOM, Node, timers or promises.
+Import only the SDK `server` module and your own game files. Rule names match `/^[a-z][a-zA-Z0-9]{0,31}$/`; the game
+id matches `/^[a-z][a-z0-9-]{1,31}$/` and prefixes every Nakama RPC.
+
+The game calls `client.rpc("visit", payload?)`. `friendsdk dev`, `build` and
+`test` run the same rules in the browser through `createLocalGameBackend`, so a
+preview needs no server. `friendsdk build` also writes `server.js`, a Nakama
+runtime module containing the rules, `beforeAuthenticateCustom` and one named
+RPC function per rule (Nakama registers handlers by top-level name). When
+`NAKAMA_HOST` is set, the host runtime instead signs the selected Friend in and
+forwards calls: it signs a `Rare Friends login` message with the wallet
+(`personal_sign`, cached for an hour), Nakama's hook recovers the signer, reads
+`ownerOf` and `generation` on the Generations contract through `CHAIN_RPC_URL`,
+and issues a session for the custom ID `rf:<chainId>:<contract>:<tokenId>` with
+the controller in its variables. Storage objects are written with read
+permission 1 and write permission 0, so clients can read their own state but only
+rules change it. A session lasts `session.token_expiry_sec`; re-signing in
+rechecks ownership, which is how a transferred Friend leaves its old controller.
+
 ## Sandbox and bridge
 
 The runtime places one developer iframe inside `GameFrame`, using
@@ -347,10 +398,11 @@ Only the exact child window receives the transferred `MessagePort`. The child
 accepts initialization only from its parent. Use a child CSP restricting scripts,
 assets and approved read endpoints. The runner supplies this serving policy.
 
-`bindGameFrame(port, { client, authorize, onSnapshot })` binds the selected
+`bindGameFrame(port, { client, authorize, backend?, onSnapshot })` binds the selected
 Friend's client. `authorize(method, args)` confirms buy, play and redeem, plus
 settlement in chain mode, inside the frame. Calls allow only `read`, `canBuy`, `buy`, `play`, `settle` and `redeem`,
-with quantities 1–99. `setPaused` stops game input while runtime menus are open.
+with quantities 1–99, and `rpc(name, payload)`, forwarded to `backend` without a
+prompt. `setPaused` stops game input while runtime menus are open.
 Close the bridge and pending approvals on identity changes, child reload or
 unmount. Community code stays in the sandbox.
 
@@ -420,11 +472,12 @@ and proposed recovery work.
 
 ## Unsupported actions
 
-SDK v0.1.2 has no trading, listing, bidding, swap, creator-fee/revenue-share, wearable
-NFT, upgrade, additional-currency or persistence APIs. Fixed-price vendor
-redemption is the sale model supplied by the chance-game client. These are
-implementation limits, not a ban on those ideas; document the custom integration
-your design needs. The browser runtime supports preview and explicitly configured
-live play. See the
+SDK v0.2.0 has no trading, listing, bidding, swap, creator-fee/revenue-share or
+wearable NFT APIs. Upgrades, additional currencies and persistent progress are
+game server rules; on-chain custody of items is still the contract phase.
+Fixed-price vendor redemption is the sale model supplied by the chance-game
+client. These are implementation limits, not a ban on those ideas; document the
+custom integration your design needs. The browser runtime supports preview and
+explicitly configured live play. See the
 [capability list](HOST_INTEGRATION.md#capabilities) for implemented functions and
 remaining integration work.

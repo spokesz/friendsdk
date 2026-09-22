@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { context } from 'esbuild';
+import { build, context } from 'esbuild';
 import { readFile, writeFile, mkdir, realpath, stat, lstat, cp, readdir, rename } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
@@ -18,7 +18,7 @@ const html = (name, title, child = false) => `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${child ? `<meta http-equiv="Content-Security-Policy" content="${childCsp}">` : ''}<title>${escapeHtml(title)}</title><link rel="stylesheet" href="./${name}.css"></head><body><main id="root"></main><script src="./${name}.js"></script></body></html>
 `;
 const outputManifest = '.friendsdk-output.json';
-const standardOutputs = new Set(['index.html', 'game.html', 'runtime.js', 'game.js', 'runtime.css', 'game.css', 'layout.css', 'game-layout.css']);
+const standardOutputs = new Set(['index.html', 'game.html', 'runtime.js', 'game.js', 'runtime.css', 'game.css', 'layout.css', 'game-layout.css', 'server.js']);
 const generatedName = name => typeof name === 'string' && (standardOutputs.has(name) ||
   /^assets\/(?!\.)[^/\\]+-[A-Z0-9]{8}\.(png|jpg|webp|svg|woff2|mp3|wav)$/.test(name));
 
@@ -75,6 +75,36 @@ export async function readGameDeployment(input) {
   return Object.freeze({ ...deployment, deploymentBlock: String(block) });
 }
 
+const sdkExports = {
+  name: 'friendsdk-exports', setup(build) {
+    build.onResolve({ filter: /^@rarefriends\/friendsdk(?:\/|$)/ }, args => {
+      const name = args.path.replace('@rarefriends/friendsdk', '.') || '.';
+      const entry = packageJson.exports[name];
+      if (!entry) return { errors: [{ text: `Unknown SDK export: ${args.path}` }] };
+      return { path: path.join(sdkRoot, typeof entry === 'string' ? entry : entry.import) };
+    });
+  },
+};
+
+/** Game server address from NAKAMA_* variables. The server key is Nakama's public client key. */
+export function readGameBackend(env = process.env) {
+  if (!env.NAKAMA_HOST) return undefined;
+  if (!/^[a-z0-9.-]+$/i.test(env.NAKAMA_HOST)) throw new Error('NAKAMA_HOST must be a hostname or IP address.');
+  const useSSL = env.NAKAMA_SSL === 'true';
+  const port = Number(env.NAKAMA_PORT ?? (useSSL ? 443 : 7350));
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('NAKAMA_PORT must be a port number.');
+  return Object.freeze({ host: env.NAKAMA_HOST, port, useSSL, serverKey: env.NAKAMA_SERVER_KEY ?? 'defaultkey' });
+}
+
+/** Load a game's server.ts in Node to list its RPC names for the Nakama entrypoint. */
+async function readServerModule(serverPath) {
+  const result = await build({ entryPoints: [serverPath], bundle: true, platform: 'node', format: 'esm', target: 'es2022', write: false, logLevel: 'warning', plugins: [sdkExports] });
+  const module = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`);
+  const server = module.default;
+  if (!server || typeof server.id !== 'string' || !server.rpcs) throw new Error('server.ts must default-export defineFriendGameServer({ id, rpcs }).');
+  return { id: server.id, rpcs: Object.keys(server.rpcs) };
+}
+
 /** Bundle a game component with the SDK runtime. Only generated files go in outdir. */
 export async function buildGame(gameDirectory, { outdir = path.join(gameDirectory, '.friendsdk'), watch = false, deployment } = {}) {
   const liveDeployment = deployment === undefined ? undefined : await readGameDeployment(deployment);
@@ -90,6 +120,11 @@ export async function buildGame(gameDirectory, { outdir = path.join(gameDirector
     await stat(hostStylePath);
     hostStyleImport = `import ${JSON.stringify(hostStylePath)};`;
   } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  const serverPath = path.join(directory, 'server.ts');
+  let serverModule;
+  try { await stat(serverPath); serverModule = await readServerModule(serverPath); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  const backend = readGameBackend();
+  if (backend && !serverModule) throw new Error('NAKAMA_HOST is set but this game has no server.ts.');
   await mkdir(outdir, { recursive: true });
   outdir = await realpath(outdir);
   for (const source of [directory, await realpath(process.cwd()), await realpath(sdkRoot)]) {
@@ -118,16 +153,6 @@ export async function buildGame(gameDirectory, { outdir = path.join(gameDirector
       });
     },
   };
-  const sdkExports = {
-    name: 'friendsdk-exports', setup(build) {
-      build.onResolve({ filter: /^@rarefriends\/friendsdk(?:\/|$)/ }, args => {
-        const name = args.path.replace('@rarefriends/friendsdk', '.') || '.';
-        const entry = packageJson.exports[name];
-        if (!entry) return { errors: [{ text: `Unknown SDK export: ${args.path}` }] };
-        return { path: path.join(sdkRoot, typeof entry === 'string' ? entry : entry.import) };
-      });
-    },
-  };
   const common = {
     absWorkingDir: directory, bundle: true, format: 'iife', platform: 'browser', target: 'es2022', jsx: 'automatic',
     define: { 'process.env.NODE_ENV': '"production"' }, minify: true, logLevel: 'warning',
@@ -145,11 +170,13 @@ const definition = parseChanceGame(gameJson);`;
     resolveDir: directory, sourcefile: 'runtime.tsx', loader: 'tsx', contents: `${shared}
 import {GameHost} from '@rarefriends/friendsdk/runtime';
 ${hostStyleImport}
+${serverModule ? `import server from ${JSON.stringify(serverPath)};` : 'const server = undefined;'}
 const deployment = ${JSON.stringify(liveDeployment) ?? 'undefined'};
 if (deployment) deployment.deploymentBlock = BigInt(deployment.deploymentBlock);
-createRoot(document.getElementById('root')).render(<GameHost definition={definition} frameUrl="./game.html" deployment={deployment}/>);`,
+const backend = ${JSON.stringify(backend) ?? 'undefined'};
+createRoot(document.getElementById('root')).render(<GameHost definition={definition} frameUrl="./game.html" deployment={deployment} server={server} backend={backend}/>);`,
   } });
-  let child;
+  let child, server;
   try {
     child = await context({ ...common, outfile: path.join(outdir, 'game.js'), stdin: {
       resolveDir: directory, sourcefile: 'game.tsx', loader: 'tsx', contents: `${shared}
@@ -157,20 +184,36 @@ import {GameSession} from '@rarefriends/friendsdk/runtime';
 import Game from ${JSON.stringify(componentPath)};
 createRoot(document.getElementById('root')).render(<GameSession definition={definition}>{props=><Game {...props}/>}</GameSession>);`,
     } });
-    await Promise.all([host.rebuild(), child.rebuild()]);
+    if (serverModule) {
+      // Nakama resolves handlers by their top-level names, so every RPC gets a named function.
+      const registrations = serverModule.rpcs.map((name, index) => `  initializer.registerRpc(${JSON.stringify(`${serverModule.id}.${name}`)}, rpc${index});`).join('\n');
+      const handlers = serverModule.rpcs.map((name, index) => `function rpc${index}(ctx, logger, nk, payload) { return callFriendRpc(server, ${JSON.stringify(name)}, ctx, logger, nk, payload); }`).join('\n');
+      server = await context({ ...common, format: 'cjs', target: 'es2020', minify: false, outfile: path.join(outdir, 'server.js'), stdin: {
+        resolveDir: directory, sourcefile: 'server-entry.ts', loader: 'ts', contents: `import server from ${JSON.stringify(serverPath)};
+import {beforeAuthenticateCustom, callFriendRpc} from '@rarefriends/friendsdk/server/nakama';
+function InitModule(ctx, logger, nk, initializer) {
+  initializer.registerBeforeAuthenticateCustom(beforeAuthenticateCustom);
+${registrations}
+  logger.info('FriendSDK game server ready: %s', server.id);
+}
+${handlers}
+!InitModule && InitModule.bind(null);`,
+      } });
+    }
+    await Promise.all([host.rebuild(), child.rebuild(), server?.rebuild()]);
     // Separate styles keep the game document full-size inside its single SDK frame.
     await writeFile(path.join(outdir, 'layout.css'), '*{box-sizing:border-box}html,body{margin:0;font-family:ui-monospace,monospace;background:#eee}#root{max-width:var(--rf-game-max-width,960px);margin:auto}');
     await writeFile(path.join(outdir, 'game-layout.css'), '*{box-sizing:border-box}html,body,#root{width:100%;height:100%;margin:0;overflow:hidden;font-family:ui-monospace,monospace}');
     await writeFile(path.join(outdir, 'index.html'), html('runtime', definition.name).replace('</head>', '<link rel="stylesheet" href="./layout.css"></head>'));
     await writeFile(path.join(outdir, 'game.html'), html('game', definition.name, true).replace('</head>', '<link rel="stylesheet" href="./game-layout.css"></head>'));
-    for (const file of standardOutputs) generated.add(file);
+    for (const file of standardOutputs) if (file !== 'server.js' || serverModule) generated.add(file);
     await checkOutputDirectory(outdir, generated);
     await writeFile(path.join(outdir, outputManifest), JSON.stringify({ version: 1, files: [...generated].sort() }) + '\n');
-    if (watch) await Promise.all([host.watch(), child.watch()]);
-    else await Promise.all([host.dispose(), child.dispose()]);
-    return { outdir, close: async () => { await Promise.all([host.dispose(), child.dispose()]); } };
+    if (watch) await Promise.all([host.watch(), child.watch(), server?.watch()]);
+    else await Promise.all([host.dispose(), child.dispose(), server?.dispose()]);
+    return { outdir, close: async () => { await Promise.all([host.dispose(), child.dispose(), server?.dispose()]); } };
   } catch (error) {
-    await host.dispose(); await child?.dispose(); throw error;
+    await host.dispose(); await child?.dispose(); await server?.dispose(); throw error;
   }
 }
 

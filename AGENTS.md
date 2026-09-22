@@ -54,6 +54,15 @@ context already exists. Reuse that context without adding another selection or
 connection flow. `GameSession` handles the child session. Game code uses only the
 SDK's fixed action client; wallet providers and clients remain outside the sandbox.
 
+Durable progress belongs in `server.ts` beside `index.tsx`: default-export
+`defineFriendGameServer({ id, rpcs })` from `@rarefriends/friendsdk/server` and
+call rules with `client.rpc(name, payload)`. The server decides money, items,
+upgrades, timers and outcomes; the client requests. Rules are synchronous JSON
+functions with Friend-scoped `ctx.storage`, run in the browser during previews and
+tests and on Nakama in production. Never add a rule that stores a client-authored
+save blob, grants resources on request or reads the client's clock. See
+[the game server API](API.md#game-server).
+
 Do not implement wallet connection, NFT discovery, an ownership gate or another
 Friend selector in game code. Use the SDK runtime. Never scan the Generations
 collection or enumerate token IDs to find a player's NFTs. Do not locate another

@@ -1,7 +1,7 @@
 {
   "name": "@rarefriends/friendsdk",
-  "version": "0.1.2",
-  "description": "Rare Friends game building blocks and chance-game reference",
+  "version": "0.2.0",
+  "description": "Rare Friends game building blocks, chance-game reference and Friend-scoped game server",
   "type": "module",
   "license": "Apache-2.0",
   "engines": {
@@ -117,6 +117,14 @@
       "types": "./dist/runtime.d.ts",
       "import": "./dist/runtime.js"
     },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js"
+    },
+    "./server/nakama": {
+      "types": "./dist/server/nakama.d.ts",
+      "import": "./dist/server/nakama.js"
+    },
     "./wallet": {
       "types": "./dist/wallet.d.ts",
       "import": "./dist/wallet.js"
@@ -169,7 +177,9 @@
   },
   "dependencies": {
     "viem": "2.56.3",
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "@noble/curves": "1.9.1",
+    "@noble/hashes": "1.8.0"
   },
   "peerDependencies": {
     "react": "^19.0.0",

@@ -1,6 +1,6 @@
 # Game component starter
 
-SDK version **v0.1.2**. This component is a small playable garden with a pack
+SDK version **v0.2.0**. This component is a small playable garden with a pack
 dispenser and an opening station. It has no application routes, navigation,
 wallet connection code or identity gate. The SDK runtime supplies those game
 infrastructure capabilities and the selected, verified owned Friend.
@@ -15,6 +15,9 @@ Move with WASD, arrow keys, or a tap/click destination. Walk to the dispenser,
 press E or tap its prompt, and buy a simulated pack. Walk to the crate to open
 it. Keep the revealed collectible or redeem it through the inventory menu.
 Settings include mute and reduced motion; failed artwork loads can be retried.
+`server.ts` holds one game server rule, `visit`, which counts this Friend's
+visits; the HUD shows the count. It runs in the browser for previews and on
+Nakama when the runtime is built with `NAKAMA_HOST`.
 
 | Rule | Exact value |
 | --- | --- |
