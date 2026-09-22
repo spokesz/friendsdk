@@ -15,3 +15,6 @@ export function readGameDeployment(input: unknown): Promise<Readonly<{
 
 /** Game server address from NAKAMA_HOST, NAKAMA_PORT, NAKAMA_SSL and NAKAMA_SERVER_KEY; undefined when unset. */
 export function readGameBackend(env?: Record<string, string | undefined>): Readonly<{ host: string; port: number; useSSL: boolean; serverKey: string }> | undefined;
+
+/** Bundle several games' server.ts rules into one Nakama runtime module; resolves with the game ids. */
+export function buildServerModule(gameDirectories: readonly string[], outfile: string): Promise<string[]>;

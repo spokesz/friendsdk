@@ -102,7 +102,34 @@ async function readServerModule(serverPath) {
   const module = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`);
   const server = module.default;
   if (!server || typeof server.id !== 'string' || !server.rpcs) throw new Error('server.ts must default-export defineFriendGameServer({ id, rpcs }).');
-  return { id: server.id, rpcs: Object.keys(server.rpcs) };
+  return { id: server.id, rpcs: Object.keys(server.rpcs), path: serverPath };
+}
+
+/** Nakama entrypoint source for one or more games. Nakama resolves handlers by their top-level names, so every RPC gets a named function. */
+function serverEntry(modules) {
+  const ids = modules.map(module => module.id);
+  if (new Set(ids).size !== ids.length) throw new Error(`Game server ids must be unique: ${ids.join(', ')}`);
+  const imports = modules.map((module, game) => `import server${game} from ${JSON.stringify(module.path)};`).join('\n');
+  const registrations = modules.flatMap((module, game) => module.rpcs.map((name, index) => `  initializer.registerRpc(${JSON.stringify(`${module.id}.${name}`)}, rpc${game}_${index});`)).join('\n');
+  const handlers = modules.flatMap((module, game) => module.rpcs.map((name, index) => `function rpc${game}_${index}(ctx, logger, nk, payload) { return callFriendRpc(server${game}, ${JSON.stringify(name)}, ctx, logger, nk, payload); }`)).join('\n');
+  return `${imports}
+import {beforeAuthenticateCustom, callFriendRpc} from '@rarefriends/friendsdk/server/nakama';
+function InitModule(ctx, logger, nk, initializer) {
+  initializer.registerBeforeAuthenticateCustom(beforeAuthenticateCustom);
+${registrations}
+  logger.info('FriendSDK game servers ready: %s', ${JSON.stringify(ids.join(', '))});
+}
+${handlers}
+!InitModule && InitModule.bind(null);`;
+}
+
+/** Bundle several games' server rules into one Nakama runtime module; one deployment serves every game. */
+export async function buildServerModule(gameDirectories, outfile) {
+  const modules = [];
+  for (const gameDirectory of gameDirectories) modules.push(await readServerModule(path.join(await realpath(path.resolve(gameDirectory)), 'server.ts')));
+  await build({ bundle: true, format: 'cjs', platform: 'browser', target: 'es2020', logLevel: 'warning', plugins: [sdkExports], outfile: path.resolve(outfile),
+    stdin: { resolveDir: path.dirname(modules[0].path), sourcefile: 'server-entry.ts', loader: 'ts', contents: serverEntry(modules) } });
+  return modules.map(module => module.id);
 }
 
 /** Bundle a game component with the SDK runtime. Only generated files go in outdir. */
@@ -185,20 +212,8 @@ import Game from ${JSON.stringify(componentPath)};
 createRoot(document.getElementById('root')).render(<GameSession definition={definition}>{props=><Game {...props}/>}</GameSession>);`,
     } });
     if (serverModule) {
-      // Nakama resolves handlers by their top-level names, so every RPC gets a named function.
-      const registrations = serverModule.rpcs.map((name, index) => `  initializer.registerRpc(${JSON.stringify(`${serverModule.id}.${name}`)}, rpc${index});`).join('\n');
-      const handlers = serverModule.rpcs.map((name, index) => `function rpc${index}(ctx, logger, nk, payload) { return callFriendRpc(server, ${JSON.stringify(name)}, ctx, logger, nk, payload); }`).join('\n');
-      server = await context({ ...common, format: 'cjs', target: 'es2020', minify: false, outfile: path.join(outdir, 'server.js'), stdin: {
-        resolveDir: directory, sourcefile: 'server-entry.ts', loader: 'ts', contents: `import server from ${JSON.stringify(serverPath)};
-import {beforeAuthenticateCustom, callFriendRpc} from '@rarefriends/friendsdk/server/nakama';
-function InitModule(ctx, logger, nk, initializer) {
-  initializer.registerBeforeAuthenticateCustom(beforeAuthenticateCustom);
-${registrations}
-  logger.info('FriendSDK game server ready: %s', server.id);
-}
-${handlers}
-!InitModule && InitModule.bind(null);`,
-      } });
+      server = await context({ ...common, format: 'cjs', target: 'es2020', minify: false, outfile: path.join(outdir, 'server.js'),
+        stdin: { resolveDir: directory, sourcefile: 'server-entry.ts', loader: 'ts', contents: serverEntry([serverModule]) } });
     }
     await Promise.all([host.rebuild(), child.rebuild(), server?.rebuild()]);
     // Separate styles keep the game document full-size inside its single SDK frame.
@@ -239,23 +254,29 @@ export function createGameServer(outdir) {
 
 async function main() {
   const args = process.argv.slice(2), command = args.shift() ?? 'dev';
-  const usage = 'Usage: friendsdk init|dev|build|check|test <game-directory>\nDev/build: --outdir directory --deployment public-deployment.json\nDev: --host 127.0.0.1 --port 4173\nTest (automated): --width 960 --screenshot image.png';
+  const usage = 'Usage: friendsdk init|dev|build|check|test <game-directory>\n       friendsdk server <game-directory>... --outfile index.js\nDev/build: --outdir directory --deployment public-deployment.json\nDev: --host 127.0.0.1 --port 4173\nTest (automated): --width 960 --screenshot image.png';
   if (command === '--help') { console.log(usage); return; }
   if (command === '--version') { console.log(packageJson.version); return; }
-  if (!['init', 'dev', 'build', 'check', 'test'].includes(command)) throw new Error(usage);
-  let directory, deploymentPath, outdir, screenshot, width = 960, host = '127.0.0.1', port = 4173;
+  if (!['init', 'dev', 'build', 'check', 'test', 'server'].includes(command)) throw new Error(usage);
+  let directory, deploymentPath, outdir, outfile, screenshot, width = 960, host = '127.0.0.1', port = 4173;
+  const directories = [];
   const allowed = command === 'dev' ? ['--deployment', '--outdir', '--host', '--port']
-    : command === 'build' ? ['--deployment', '--outdir'] : command === 'test' ? ['--width', '--screenshot'] : [];
+    : command === 'build' ? ['--deployment', '--outdir'] : command === 'test' ? ['--width', '--screenshot'] : command === 'server' ? ['--outfile'] : [];
   const flags = new Set();
   while (args.length) {
     const arg = args.shift();
-    if (!arg.startsWith('--')) { if (directory !== undefined) throw new Error(usage); directory = arg; continue; }
+    if (!arg.startsWith('--')) {
+      if (command === 'server') { directories.push(arg); continue; }
+      if (directory !== undefined) throw new Error(usage);
+      directory = arg; continue;
+    }
     if (!allowed.includes(arg) || flags.has(arg)) throw new Error(usage);
     flags.add(arg);
     const value = args.shift();
     if (!value || value.startsWith('--')) throw new Error(`Missing value for ${arg}.`);
     if (arg === '--deployment') deploymentPath = value;
     else if (arg === '--outdir') outdir = value;
+    else if (arg === '--outfile') outfile = value;
     else if (arg === '--screenshot') screenshot = value;
     else if (arg === '--width') {
       if (!/^[1-9][0-9]*$/.test(value) || !Number.isSafeInteger(Number(value))) throw new Error('Width must be a positive integer in pixels.');
@@ -266,6 +287,12 @@ async function main() {
       if (!/^[0-9]+$/.test(value) || Number(value) < 1 || Number(value) > 65535) throw new Error('Port must be between 1 and 65535.');
       port = Number(value);
     }
+  }
+  if (command === 'server') {
+    if (!directories.length || !outfile) throw new Error(usage);
+    const ids = await buildServerModule(directories, outfile);
+    console.log(`Built ${outfile} for ${ids.join(', ')}`);
+    return;
   }
   directory ??= command === 'init' ? 'games/my-game' : 'examples/starter';
   if (command === 'init') {
