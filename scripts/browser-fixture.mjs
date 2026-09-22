@@ -15,10 +15,10 @@ const ABI = parseAbi([
   "function generation(uint256 tokenId) view returns (uint8)",
   "function tokenBoundAccount(uint256 tokenId) view returns (address)",
 ]);
-const ownerId = owner => owner.toLowerCase() === OWNER.toLowerCase() ? 7730n : 3412n;
-const tokenOwner = id => id === 7730n ? OWNER : SECOND_OWNER;
-
-export async function installFixture(page, origin, { artworkCall, initialChain = "0x1237" } = {}) {
+/** `owner` is the connected account that owns Friend #7730; pass a real key's address when a test must also sign. */
+export async function installFixture(page, origin, { artworkCall, initialChain = "0x1237", owner = OWNER } = {}) {
+  const ownerId = value => value.toLowerCase() === owner.toLowerCase() ? 7730n : 3412n;
+  const tokenOwner = id => id === 7730n ? owner : SECOND_OWNER;
   const state = { mode: "eligible", requests: [], ownerReads: 0, hold: null, release: null, errors: [] };
   await page.addInitScript(({ owner, initialChain }) => {
     // Internal automation is the only place an account/identity may be mocked.
@@ -49,7 +49,7 @@ export async function installFixture(page, origin, { artworkCall, initialChain =
     };
     const random = crypto.getRandomValues.bind(crypto);
     crypto.getRandomValues = array => array instanceof Uint32Array && array.length === 1 ? (array[0] = 1500, array) : random(array);
-  }, { owner: OWNER, initialChain });
+  }, { owner, initialChain });
 
   async function answer(request) {
     state.requests.push(request);
@@ -63,11 +63,11 @@ export async function installFixture(page, origin, { artworkCall, initialChain =
       assert.equal(filter.address.toLowerCase(), COLLECTION.toLowerCase());
       assert(filter.topics?.[1] || filter.topics?.[2], "Discovery must filter Transfer logs by the connected owner");
       const topic = filter.topics[2] || filter.topics[1];
-      assert([padHex(OWNER, { size: 32 }), padHex(SECOND_OWNER, { size: 32 })].includes(topic.toLowerCase()), "Only owner-indexed history is allowed");
-      const owner = `0x${topic.slice(-40)}`;
+      assert([padHex(owner, { size: 32 }), padHex(SECOND_OWNER, { size: 32 })].map(value => value.toLowerCase()).includes(topic.toLowerCase()), "Only owner-indexed history is allowed");
+      const holder = `0x${topic.slice(-40)}`;
       result = filter.topics[1] ? [] : [{ address: COLLECTION, blockNumber: "0x10", blockHash: padHex("0x10", { size: 32 }),
         data: "0x", logIndex: "0x0", transactionHash: padHex("0x1234", { size: 32 }), transactionIndex: "0x0", removed: false,
-        topics: encodeEventTopics({ abi: ABI, eventName: "Transfer", args: { from: zeroAddress, to: owner, tokenId: ownerId(owner) } }) }];
+        topics: encodeEventTopics({ abi: ABI, eventName: "Transfer", args: { from: zeroAddress, to: holder, tokenId: ownerId(holder) } }) }];
     } else if (request.method === "eth_call") {
       if (request.params[0].to.toLowerCase() !== COLLECTION.toLowerCase()) {
         assert.equal(typeof artworkCall, "function", "Read only the pinned collection unless artwork is explicitly mocked");

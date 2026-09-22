@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { buildGame, createGameServer } from "./dev-game.mjs";
 import { installFixture, createArtworkFixture, assertBounds, OWNER, FRIEND_WALLET } from "./browser-fixture.mjs";
+/** The mocks behind testGame, for custom browser drivers such as a game-server end-to-end check. */
+export { installFixture, createArtworkFixture, assertBounds, OWNER, FRIEND_WALLET };
 
 /**
  * Run a game's real sandboxed runtime in headless Chromium with read-only fixtures.
