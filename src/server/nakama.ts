@@ -5,7 +5,7 @@
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { keccak_256 } from "@noble/hashes/sha3";
 import { FriendRpcError, type FriendGameServer, type FriendIdentity, type FriendStorage } from "./module.js";
-import { friendCustomId, parseFriendLogin } from "./login.js";
+import { parseFriendCustomId, parseWalletLogin } from "./login.js";
 
 // nkruntime.Codes values; the enum exists only in the type definitions.
 const INVALID_ARGUMENT = 3, INTERNAL = 13, UNAUTHENTICATED = 16;
@@ -46,18 +46,19 @@ export function recoverSigner(message: string, signature: string): string {
 
 export type FriendChainRead = (contract: string, tokenId: string) => Readonly<{ owner: string; generation: number }>;
 
-/** Verify a signed login for the custom ID being authenticated. Pure; chain reads are supplied. */
+/** Verify a wallet's signed login for the Friend named by the custom ID. Pure; chain reads are supplied. */
 export function verifyFriendLogin(input: Readonly<{ customId: string; message: string; signature: string; now: number; generations: string; read: FriendChainRead }>): FriendIdentity {
-  const login = parseFriendLogin(input.message);
+  const key = parseFriendCustomId(input.customId);
+  if (!key) throw new FriendRpcError("Unrecognized Friend account.");
+  if (key.contract !== input.generations.toLowerCase()) throw new FriendRpcError("Unknown Friend collection.");
+  const login = parseWalletLogin(input.message);
   if (!login) throw new FriendRpcError("Unrecognized sign-in message.");
-  if (input.customId !== friendCustomId(login)) throw new FriendRpcError("Sign-in message is for a different Friend.");
-  if (login.contract !== input.generations.toLowerCase()) throw new FriendRpcError("Unknown Friend collection.");
   if (!(Date.parse(login.expires) > input.now)) throw new FriendRpcError("Sign-in message expired.");
   if (recoverSigner(input.message, input.signature) !== login.account) throw new FriendRpcError("Signature does not match the account.");
-  const friend = input.read(login.contract, login.tokenId);
+  const friend = input.read(key.contract, key.tokenId);
   if (friend.owner.toLowerCase() !== login.account) throw new FriendRpcError("The signing account does not own this Friend.");
   if (friend.generation < 1) throw new FriendRpcError("This Friend is not hardwired.");
-  return Object.freeze({ chainId: login.chainId, contract: login.contract, tokenId: login.tokenId, controller: login.account });
+  return Object.freeze({ chainId: key.chainId, contract: key.contract, tokenId: key.tokenId, controller: login.account });
 }
 
 const selector = (signature: string) => hex(keccak_256(utf8(signature))).slice(0, 8);

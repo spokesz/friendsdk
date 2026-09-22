@@ -1,6 +1,6 @@
 /** Trusted host side of the game server: signs in as the selected Friend and forwards game RPCs. Never given to a game frame. */
 import { FriendRpcError } from "./server/module.js";
-import { friendCustomId, friendLoginMessage, parseFriendLogin } from "./server/login.js";
+import { friendCustomId, walletLoginMessage, parseWalletLogin } from "./server/login.js";
 
 export type NakamaBackend = Readonly<{ host: string; port: number; useSSL: boolean; serverKey: string }>;
 export type GameBackend = Readonly<{ rpc(name: string, payload: unknown): Promise<unknown>; close(): void }>;
@@ -8,12 +8,15 @@ export type NakamaGameBackendOptions = Readonly<{
   backend: NakamaBackend; gameId: string;
   friend: Readonly<{ chainId: number; contract: string; tokenId: string }>;
   account: string;
-  /** personal_sign through the connected wallet. Called at most once per hour per Friend. */
+  /** personal_sign through the connected wallet. Called at most once per hour per wallet; one signature covers every Friend it holds. */
   signMessage(message: string): Promise<string>;
 }>;
 
 const LOGIN_TTL_MS = 60 * 60 * 1000;
 const UNAVAILABLE = "Game server unavailable. Check your connection and retry.";
+type Signed = Readonly<{ message: string; signature: string }>;
+/** One signature per wallet, shared by every Friend backend on the page; sessionStorage carries it across page loads. */
+const signed = new Map<string, Signed>();
 
 function tokenExpiry(token: string): number {
   try {
@@ -31,23 +34,24 @@ export function createNakamaGameBackend(options: NakamaGameBackendOptions): Game
   const { backend, gameId, friend, account } = options;
   if (!/^[a-z0-9.-]+$/i.test(backend.host) || !Number.isInteger(backend.port) || backend.port < 1 || backend.port > 65535) throw new TypeError("Invalid game server address.");
   const base = `${backend.useSSL ? "https" : "http"}://${backend.host}:${backend.port}`;
-  const customId = friendCustomId(friend), cacheKey = `friendsdk:login:${customId}:${account.toLowerCase()}`;
+  const customId = friendCustomId(friend), cacheKey = `friendsdk:login:${account.toLowerCase()}`;
   let alive = true, session: { token: string; expiresAt: number } | null = null, pending: Promise<string> | null = null;
-  let signed: { message: string; signature: string } | null = null;
   const store = typeof sessionStorage === "undefined" ? undefined : sessionStorage;
-  const usable = (value: { message: string; signature: string } | null) =>
-    value !== null && Date.parse(parseFriendLogin(value.message)?.expires ?? "") > Date.now() + 60_000;
+  const usable = (value: Signed | null | undefined): value is Signed =>
+    !!value && Date.parse(parseWalletLogin(value.message)?.expires ?? "") > Date.now() + 60_000;
 
-  async function credentials(): Promise<{ message: string; signature: string }> {
-    if (usable(signed)) return signed!;
+  async function credentials(): Promise<Signed> {
+    const held = signed.get(cacheKey);
+    if (usable(held)) return held;
     try {
       const cached = JSON.parse(store?.getItem(cacheKey) ?? "null");
-      if (usable(cached)) return signed = cached;
+      if (usable(cached)) { signed.set(cacheKey, cached); return cached; }
     } catch { /* re-sign */ }
-    const message = friendLoginMessage({ ...friend, account, expires: new Date(Date.now() + LOGIN_TTL_MS).toISOString() });
-    signed = { message, signature: await options.signMessage(message) };
-    try { store?.setItem(cacheKey, JSON.stringify(signed)); } catch { /* storage unavailable */ }
-    return signed;
+    const message = walletLoginMessage({ account, expires: new Date(Date.now() + LOGIN_TTL_MS).toISOString() });
+    const value = { message, signature: await options.signMessage(message) };
+    signed.set(cacheKey, value);
+    try { store?.setItem(cacheKey, JSON.stringify(value)); } catch { /* storage unavailable */ }
+    return value;
   }
   async function login(): Promise<string> {
     const vars = await credentials();
@@ -58,7 +62,7 @@ export function createNakamaGameBackend(options: NakamaGameBackendOptions): Game
         body: JSON.stringify({ id: customId, vars }) });
     } catch { throw new Error(UNAVAILABLE); }
     if (!response.ok) {
-      signed = null;
+      signed.delete(cacheKey);
       try { store?.removeItem(cacheKey); } catch { /* storage unavailable */ }
       throw await readError(response, "Sign-in was rejected.");
     }

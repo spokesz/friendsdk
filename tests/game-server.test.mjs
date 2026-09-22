@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { privateKeyToAccount } from 'viem/accounts';
-import { defineFriendGameServer, createLocalGameBackend, FriendRpcError, friendCustomId, friendLoginMessage, parseFriendLogin } from '../dist/server/index.js';
+import { defineFriendGameServer, createLocalGameBackend, FriendRpcError, friendCustomId, walletLoginMessage, parseWalletLogin } from '../dist/server/index.js';
 import { verifyFriendLogin, recoverSigner, callFriendRpc, beforeAuthenticateCustom, setKnownGames } from '../dist/server/nakama.js';
 import { createNakamaGameBackend } from '../dist/nakama-client.js';
 import { bindGameFrame, createFrameGameClient } from '../dist/frame-bridge.js';
@@ -68,27 +68,29 @@ test('the bridge routes rpc calls to the game backend without a wallet confirmat
   try { await assert.rejects(child.client.rpc('load'), /Game server request failed/); } finally { serverless.close(); child.close(); }
 });
 
-test('a signed login is accepted only for the Friend, account and owner it names', async () => {
+test('one wallet signature signs in every Friend the wallet owns, and nothing else', async () => {
   const expires = new Date(Date.now() + 60_000).toISOString();
-  const message = friendLoginMessage({ ...friend, account: owner.address, expires });
+  const message = walletLoginMessage({ account: owner.address, expires });
   const signature = await owner.signMessage({ message });
-  assert.deepEqual(parseFriendLogin(message), { chainId: 4663, contract: contract.toLowerCase(), tokenId: '7730', account: owner.address.toLowerCase(), expires });
+  assert.deepEqual(parseWalletLogin(message), { account: owner.address.toLowerCase(), expires });
   assert.equal(recoverSigner(message, signature), owner.address.toLowerCase());
-  const read = (address, tokenId) => { assert.equal(address, contract.toLowerCase()); assert.equal(tokenId, '7730'); return { owner: owner.address, generation: 1 }; };
+  const owned = new Set(['7730', '41']);
+  const read = (address, tokenId) => { assert.equal(address, contract.toLowerCase()); return { owner: owned.has(tokenId) ? owner.address : `0x${'22'.repeat(20)}`, generation: 1 }; };
   const base = { customId: friendCustomId(friend), message, signature, now: Date.now(), generations: contract, read };
   assert.deepEqual(verifyFriendLogin(base), identity);
-  assert.throws(() => verifyFriendLogin({ ...base, customId: friendCustomId({ ...friend, tokenId: '1' }) }), /different Friend/);
+  assert.deepEqual(verifyFriendLogin({ ...base, customId: friendCustomId({ ...friend, tokenId: '41' }) }), { ...identity, tokenId: '41' }, 'The same signature signs in another owned Friend');
+  assert.throws(() => verifyFriendLogin({ ...base, customId: friendCustomId({ ...friend, tokenId: '1' }) }), /does not own/);
+  assert.throws(() => verifyFriendLogin({ ...base, customId: 'rf:4663:nope:7730' }), /Unrecognized Friend account/);
   assert.throws(() => verifyFriendLogin({ ...base, now: Date.parse(expires) }), /expired/);
   assert.throws(() => verifyFriendLogin({ ...base, message: message.replace(owner.address.toLowerCase(), `0x${'22'.repeat(20)}`) }), /does not match the account/);
-  assert.throws(() => verifyFriendLogin({ ...base, read: () => ({ owner: `0x${'22'.repeat(20)}`, generation: 1 }) }), /does not own/);
   assert.throws(() => verifyFriendLogin({ ...base, read: () => ({ owner: owner.address, generation: 0 }) }), /not hardwired/);
   assert.throws(() => verifyFriendLogin({ ...base, generations: `0x${'33'.repeat(20)}` }), /Unknown Friend collection/);
-  assert.throws(() => verifyFriendLogin({ ...base, message: 'Log in please' }), /Unrecognized/);
+  assert.throws(() => verifyFriendLogin({ ...base, message: 'Log in please' }), /Unrecognized sign-in/);
 });
 
 test('the Nakama hooks verify ownership on chain and scope storage to the Friend and game', async () => {
   const expires = new Date(Date.now() + 60_000).toISOString();
-  const message = friendLoginMessage({ ...friend, account: owner.address, expires });
+  const message = walletLoginMessage({ account: owner.address, expires });
   const signature = await owner.signMessage({ message });
   const calls = [];
   const nk = {
@@ -149,8 +151,8 @@ test('the host backend signs in once, forwards rpc calls with the session and re
       logins++;
       const body = JSON.parse(init.body);
       assert.equal(init.headers.Authorization, `Basic ${btoa('defaultkey:')}`);
-      assert.equal(body.id, friendCustomId(friend));
-      assert.equal(parseFriendLogin(body.vars.message)?.account, owner.address.toLowerCase());
+      assert.equal(body.id, friendCustomId(logins < 3 ? friend : { ...friend, tokenId: '41' }));
+      assert.equal(parseWalletLogin(body.vars.message)?.account, owner.address.toLowerCase());
       assert.equal(body.vars.signature, 'signed');
       return new Response(JSON.stringify({ token: token(Math.floor(Date.now() / 1000) + (logins === 1 ? 5 : 900)) }), { status: 200 });
     }
@@ -171,5 +173,10 @@ test('the host backend signs in once, forwards rpc calls with the session and re
     assert.equal(signatures, 1, 'The wallet signs one message per session');
     backend.close();
     await assert.rejects(backend.rpc('add', { by: 1 }), /session changed/);
+    const other = createNakamaGameBackend({ backend: { host: '127.0.0.1', port: 7350, useSSL: false, serverKey: 'defaultkey' }, gameId: 'counter', friend: { ...friend, tokenId: '41' },
+      account: owner.address, signMessage: async () => { signatures++; return 'signed'; } });
+    assert.deepEqual(await other.rpc('add', { by: 3 }), { count: 3 });
+    assert.equal([logins, signatures].join(), '3,1', 'Switching to another Friend of the same wallet signs in again without a new signature');
+    other.close();
   } finally { globalThis.fetch = original; }
 });

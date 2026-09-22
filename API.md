@@ -91,7 +91,7 @@ confirmations in the runtime. See [layout examples](HOST_INTEGRATION.md#react-ru
 | Module | Exports and use |
 | --- | --- |
 | `runtime` | `GameHost`, `ConnectedGameHost`, `GameSession`, `GameComponentProps`, `GameServerClient`, `createNakamaGameBackend`, `NakamaBackend`, `createLiveGameClient`, `LiveGameDeployment`, `LIVE_GAME_MAX_ORACLE_FEE`. Preview/live runtime, game server connection and child session. |
-| `server` | `defineFriendGameServer`, `FriendRpcError`, `FriendRpcContext`, `FriendStorage`, `FriendIdentity`, `createLocalGameBackend`, `friendCustomId`, `friendLoginMessage`, `parseFriendLogin`. Game rules that run in the browser preview and on Nakama. |
+| `server` | `defineFriendGameServer`, `FriendRpcError`, `FriendRpcContext`, `FriendStorage`, `FriendIdentity`, `createLocalGameBackend`, `friendCustomId`, `parseFriendCustomId`, `walletLoginMessage`, `parseWalletLogin`. Game rules that run in the browser preview and on Nakama. |
 | `server/nakama` | `beforeAuthenticateCustom`, `callFriendRpc`, `verifyFriendLogin`, `recoverSigner`, `readFriendOnChain`. Nakama runtime adapter; bundled by the CLI, never imported by browser code. |
 | `world-view` | Optional `GameWorld` utility with canonical Friend sprites and keyboard/touch movement. Import `world-view.css` when using it. |
 | `world` | Optional world utilities: `WORLD_PRESETS`, `getWorldPreset`, `validateWorld`, `renderWorld`, `renderWorldLayers`, `renderProp`, `project`, `unproject`, `isWorldWalkable`. Geometry, props, collision and depth sorting. |
@@ -384,12 +384,14 @@ The game calls `client.rpc("visit", payload?)`. `friendsdk dev`, `build` and
 preview needs no server. `friendsdk build` also writes `server.js`, a Nakama
 runtime module containing the rules, `beforeAuthenticateCustom` and one named
 RPC function per rule (Nakama registers handlers by top-level name). When
-`NAKAMA_HOST` is set, the host runtime instead signs the selected Friend in and
-forwards calls: it signs a `Rare Friends login` message with the wallet
-(`personal_sign`, cached for an hour), Nakama's hook recovers the signer, reads
-`ownerOf` and `generation` on the Generations contract through `CHAIN_RPC_URL`,
-and issues a session for the custom ID `rf:<chainId>:<contract>:<tokenId>` with
-the controller in its variables. Storage objects are written with read
+`NAKAMA_HOST` is set, the host runtime instead signs in through Nakama and
+forwards calls: the wallet signs one `Rare Friends login` message naming only
+the wallet (`personal_sign`, cached for an hour and shared by every Friend it
+holds, so switching Friends never prompts again). Each sign-in names a Friend by
+custom ID `rf:<chainId>:<contract>:<tokenId>`; Nakama's hook recovers the signer,
+reads that Friend's `ownerOf` and `generation` on the Generations contract
+through `CHAIN_RPC_URL`, and issues a session for the Friend's account with the
+controller in its variables. Storage objects are written with read
 permission 1 and write permission 0, so clients can read their own state but only
 rules change it. A session lasts `session.token_expiry_sec`; re-signing in
 rechecks ownership, which is how a transferred Friend leaves its old controller.

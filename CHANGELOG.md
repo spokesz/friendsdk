@@ -5,9 +5,10 @@
 - Added the game server: `server.ts` rules defined with `defineFriendGameServer`,
   called from games through `client.rpc`, with Friend-scoped storage. The same
   rules run in the browser for previews and tests and on Nakama in production.
-- Added wallet sign-in for Nakama: the runtime signs a login message, and the
-  bundled `beforeAuthenticateCustom` hook verifies the signature and current
-  Generations ownership on chain before issuing a session for the Friend.
+- Added wallet sign-in for Nakama: the wallet signs one login message per hour
+  that covers every Friend it holds, and the bundled `beforeAuthenticateCustom`
+  hook verifies the signature and the named Friend's current Generations
+  ownership on chain before issuing a session for that Friend.
 - `friendsdk build` writes `server.js` for Nakama when a game has `server.ts`;
   `dev` and `build` read `NAKAMA_HOST`, `NAKAMA_PORT`, `NAKAMA_SSL` and
   `NAKAMA_SERVER_KEY`; `check` compiles the server module.

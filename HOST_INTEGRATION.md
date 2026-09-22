@@ -182,9 +182,10 @@ configured `walletClient`, a public client supporting live reads, and an
 Both components accept `server`, the game's `server.ts` module, and `backend`, a
 Nakama address `{ host, port, useSSL, serverKey }`. With `server` alone the rules
 run in the browser and state lasts for the page session. With `backend` the host
-signs the selected Friend in (one wallet signature per hour, `personal_sign`, no
-transaction) and forwards `client.rpc` calls to Nakama; supply a `walletClient`
-that can `signMessage`. The CLI passes both from the game directory and the
+signs the wallet in (one `personal_sign` per hour, no transaction; the signature
+covers every Friend the wallet holds, so switching Friends does not prompt again)
+and forwards `client.rpc` calls to Nakama as the selected Friend; supply a
+`walletClient` that can `signMessage`. The CLI passes both from the game directory and the
 `NAKAMA_*` environment.
 
 For custom child builds, `GameSession` renders a callback with the verified
