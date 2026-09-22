@@ -109,6 +109,22 @@ function storageFor(nk: nkruntime.Nakama, userId: string, collection: string): F
   });
 }
 
+let knownGames: readonly string[] = [];
+/** The generated entrypoint names every game bundled into this module; activity is read from their collections. */
+export function setKnownGames(ids: readonly string[]): void { knownGames = ids; }
+
+/** Latest write per game among this Friend's records; every game's rules write to their own collection. */
+function activityFor(nk: nkruntime.Nakama, userId: string): Record<string, number> {
+  const latest: Record<string, number> = {};
+  for (const collection of knownGames) {
+    for (const object of nk.storageList(userId, collection, 100).objects ?? []) {
+      const at = object.updateTime < 1e12 ? object.updateTime * 1000 : object.updateTime;
+      if (!(latest[collection] >= at)) latest[collection] = at;
+    }
+  }
+  return latest;
+}
+
 /** Called from the generated entrypoint's named RPC functions; Nakama requires those to be top-level declarations. */
 export function callFriendRpc(server: FriendGameServer, name: string, ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkruntime.Nakama, payload: string): string {
   const vars = ctx.vars ?? {};
@@ -119,7 +135,8 @@ export function callFriendRpc(server: FriendGameServer, name: string, ctx: nkrun
     try { input = JSON.parse(payload); } catch { throw fail("Invalid payload.", INVALID_ARGUMENT); }
   }
   try {
-    const result = server.rpcs[name]({ friend, now: Date.now(), storage: storageFor(nk, ctx.userId, server.id) }, input);
+    const userId = ctx.userId;
+    const result = server.rpcs[name]({ friend, now: Date.now(), storage: storageFor(nk, userId, server.id), activity: () => activityFor(nk, userId) }, input);
     return JSON.stringify(result === undefined ? null : result);
   } catch (error) {
     if (error instanceof FriendRpcError) throw fail(error.message, INVALID_ARGUMENT);

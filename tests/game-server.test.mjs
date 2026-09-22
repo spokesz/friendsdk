@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { privateKeyToAccount } from 'viem/accounts';
 import { defineFriendGameServer, createLocalGameBackend, FriendRpcError, friendCustomId, friendLoginMessage, parseFriendLogin } from '../dist/server/index.js';
-import { verifyFriendLogin, recoverSigner, callFriendRpc, beforeAuthenticateCustom } from '../dist/server/nakama.js';
+import { verifyFriendLogin, recoverSigner, callFriendRpc, beforeAuthenticateCustom, setKnownGames } from '../dist/server/nakama.js';
 import { createNakamaGameBackend } from '../dist/nakama-client.js';
 import { bindGameFrame, createFrameGameClient } from '../dist/frame-bridge.js';
 import { createGamePreview, RF } from '../dist/game.js';
@@ -21,6 +21,7 @@ const counter = defineFriendGameServer({ id: 'counter', rpcs: {
     return state;
   },
   boom() { throw new Error('secret internal detail'); },
+  activity(ctx) { return ctx.activity(); },
 } });
 
 test('a local game backend keeps state per Friend and exposes only rule errors', async () => {
@@ -30,6 +31,10 @@ test('a local game backend keeps state per Friend and exposes only rule errors',
   assert.deepEqual(await backend.rpc('add', { by: 3 }), { count: 5, controller: identity.controller });
   await assert.rejects(backend.rpc('add', { by: 0 }), /Add at least 1/);
   await assert.rejects(backend.rpc('missing', null), /Unknown game action/);
+  const activity = await backend.rpc('activity', null);
+  assert.deepEqual(Object.keys(activity), ['counter']);
+  assert(Date.now() - activity.counter < 5_000, 'Activity is the last write time');
+  assert.deepEqual(await createLocalGameBackend(counter, { ...identity, tokenId: '2' }).rpc('activity', null), {}, 'No writes, no activity');
   assert.deepEqual(await createLocalGameBackend(counter, { ...identity, tokenId: '1' }).rpc('load', null), { count: 0 });
 });
 
@@ -106,12 +111,16 @@ test('the Nakama hooks verify ownership on chain and scope storage to the Friend
   let revision = 0;
   const storageNk = {
     storageRead(keys) { return keys.flatMap(({ collection, key, userId }) => { const record = store.get(`${collection}/${userId}/${key}`); return record ? [{ collection, key, userId, ...record }] : []; }) },
+    storageList(userId, collection) {
+      assert(collection, 'Nakama lists one collection at a time');
+      return { objects: [...store.entries()].filter(([id]) => id.startsWith(`${collection}/${userId}/`)).map(([id, record]) => ({ collection, key: id.split('/')[2], userId, ...record })) };
+    },
     storageWrite(writes) {
       return writes.map(write => {
         const id = `${write.collection}/${write.userId}/${write.key}`, current = store.get(id);
         if (write.version === '*' ? current : write.version !== undefined && current?.version !== write.version) throw new Error('storage write rejected');
         assert.deepEqual([write.permissionRead, write.permissionWrite], [1, 0], 'Clients may read but never write game state');
-        store.set(id, { value: write.value, version: String(++revision) });
+        store.set(id, { value: write.value, version: String(++revision), updateTime: 1_700_000_000 + revision });
         return { key: write.key, collection: write.collection, userId: write.userId, version: String(revision) };
       });
     },
@@ -120,6 +129,10 @@ test('the Nakama hooks verify ownership on chain and scope storage to the Friend
   assert.deepEqual(JSON.parse(callFriendRpc(counter, 'add', session, logger, storageNk, JSON.stringify({ by: 5 }))), { count: 5, controller: owner.address.toLowerCase() });
   assert.deepEqual(JSON.parse(callFriendRpc(counter, 'load', session, logger, storageNk, '')), { count: 5, controller: owner.address.toLowerCase() });
   assert.deepEqual([...store.keys()], ['counter/user-1/state']);
+  store.set('other-game/user-1/save', { value: {}, version: '9', updateTime: 1_700_000_500 });
+  store.set('unlisted/user-1/save', { value: {}, version: '10', updateTime: 1_700_000_900 });
+  setKnownGames(['counter', 'other-game']);
+  assert.deepEqual(JSON.parse(callFriendRpc(counter, 'activity', session, logger, storageNk, '')), { counter: 1_700_000_001_000, 'other-game': 1_700_000_500_000 }, 'Seconds from Nakama become milliseconds, latest write per bundled game');
   assert.throws(() => callFriendRpc(counter, 'add', session, logger, storageNk, '{"by":0}'), { code: 3, message: 'Add at least 1.' });
   assert.throws(() => callFriendRpc(counter, 'boom', session, logger, storageNk, ''), { code: 13, message: 'Game server error.' });
   assert.throws(() => callFriendRpc(counter, 'load', { userId: '', vars: {}, env: {} }, logger, storageNk, ''), { code: 16 });

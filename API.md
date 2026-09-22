@@ -368,7 +368,11 @@ account and `controller` is the wallet that proved ownership at sign-in. `ctx.no
 is server time in milliseconds. `ctx.storage` holds JSON objects private to this
 Friend and this game: `get(key)` returns `{ value, version } | null` and
 `put(key, value, version?)` writes; pass the version you read to refuse a
-concurrent write, `"*"` to require a new key, or nothing to overwrite. Throw
+concurrent write, `"*"` to require a new key, or nothing to overwrite.
+`ctx.activity()` returns when each game last wrote this Friend's records, by
+game id in server milliseconds, for the games bundled into the same Nakama module
+(`friendsdk server`); games only write while the Friend plays, so it is the
+platform's record of play without any extra calls. Throw
 `FriendRpcError("message")` for a rule the player should read; any other error
 becomes `"Game server error."` and stays in server logs. Handlers are synchronous
 and run in Nakama's ES2020 JavaScript runtime: no DOM, Node, timers or promises.

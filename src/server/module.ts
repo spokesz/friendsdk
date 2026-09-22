@@ -15,7 +15,11 @@ export type FriendStorage = Readonly<{
   /** Pass the version read earlier to refuse a concurrent write, "*" to require a new key, or nothing to overwrite. */
   put(key: string, value: object, version?: string): void;
 }>;
-export type FriendRpcContext = Readonly<{ friend: FriendIdentity; now: number; storage: FriendStorage }>;
+export type FriendRpcContext = Readonly<{
+  friend: FriendIdentity; now: number; storage: FriendStorage;
+  /** When each game last wrote this Friend's records, by game id, in server milliseconds. Games only write while the Friend plays. */
+  activity(): Readonly<Record<string, number>>;
+}>;
 export type FriendRpcHandler = (context: FriendRpcContext, payload: unknown) => unknown;
 export type FriendGameServer = Readonly<{ id: string; rpcs: Readonly<Record<string, FriendRpcHandler>> }>;
 

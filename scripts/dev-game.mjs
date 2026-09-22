@@ -113,7 +113,8 @@ function serverEntry(modules) {
   const registrations = modules.flatMap((module, game) => module.rpcs.map((name, index) => `  initializer.registerRpc(${JSON.stringify(`${module.id}.${name}`)}, rpc${game}_${index});`)).join('\n');
   const handlers = modules.flatMap((module, game) => module.rpcs.map((name, index) => `function rpc${game}_${index}(ctx, logger, nk, payload) { return callFriendRpc(server${game}, ${JSON.stringify(name)}, ctx, logger, nk, payload); }`)).join('\n');
   return `${imports}
-import {beforeAuthenticateCustom, callFriendRpc} from '@rarefriends/friendsdk/server/nakama';
+import {beforeAuthenticateCustom, callFriendRpc, setKnownGames} from '@rarefriends/friendsdk/server/nakama';
+setKnownGames(${JSON.stringify(ids)});
 function InitModule(ctx, logger, nk, initializer) {
   initializer.registerBeforeAuthenticateCustom(beforeAuthenticateCustom);
 ${registrations}
