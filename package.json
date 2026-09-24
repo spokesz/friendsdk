@@ -171,7 +171,7 @@
     "build:fishing": "npm run build && node scripts/dev-game.mjs build examples/fishing --outdir examples/fishing/.friendsdk/preview",
     "build:fishing:live": "npm run build && node scripts/dev-game.mjs build examples/fishing --outdir examples/fishing/.friendsdk/live --deployment examples/fishing/deployment.json",
     "check:runtime": "node scripts/check-runtime-browser.mjs",
-    "check:browser": "node scripts/check-fishing-browser.mjs && node scripts/check-embedded-browser.mjs && node scripts/check-runtime-browser.mjs && node scripts/check-starter-browser.mjs && node scripts/check-session-browser.mjs && node scripts/check-live-browser.mjs",
+    "check:browser": "node scripts/check-fishing-browser.mjs && node scripts/check-embedded-browser.mjs && node scripts/check-runtime-browser.mjs && node scripts/check-frameless-browser.mjs && node scripts/check-starter-browser.mjs && node scripts/check-session-browser.mjs && node scripts/check-live-browser.mjs",
     "check:starter": "node scripts/check-starter-browser.mjs",
     "check:live": "node scripts/check-live-browser.mjs"
   },

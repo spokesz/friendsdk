@@ -161,6 +161,7 @@ exists, use `ConnectedGameHost`:
 
 ```tsx
 <ConnectedGameHost
+  chrome="none"
   definition={definition}
   frameUrl="/game/frame.html"
   selectedFriend={selectedFriend}
@@ -174,6 +175,20 @@ Import it from the same `runtime` module. `selectedFriend` is `GameFriend | null
 account, chain ID and read-only client can be null while unavailable. The public
 client implements `GenerationIdentityClient`. Both runtime components enforce
 the same fresh ownership gate. Keep one runtime frame per game.
+Use `chrome="none"` when the site already supplies the page title, Friend
+selector and wallet interface. It removes the SDK toolbar (mode, Friend and
+wallet controls), border, background, shadow and width cap. The frame fills its
+parent's width and keeps `--rf-game-aspect-ratio`; game artwork and in-game
+controls are unchanged. Loading, eligibility errors, retry controls and action
+confirmation dialogs remain in the trusted frame. Confirmations still pause the
+game and are cancelled when its identity changes. This option does not change
+authentication, ownership checks or RPC behavior.
+
+The default `chrome="default"` keeps the standalone presentation. `GameFrame`
+and `GameHost` also accept the option; a standalone host still shows its required
+connection/selection dialog before play. For a site with its own selector, use
+`ConnectedGameHost` and update `selectedFriend` from that selector.
+
 Increment `revision` when the supplied connection invalidates identity without
 changing the other context values. For live mode, also supply `deployment`, a
 configured `walletClient`, a public client supporting live reads, and an

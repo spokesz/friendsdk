@@ -1,4 +1,5 @@
 .rf-runtime-status { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 0; padding: 20px; text-align: center; background: #eee; }
+.rf-game-frame[data-chrome="none"] .rf-runtime-status { background: transparent; color: inherit; }
 .rf-runtime-status p { max-width: 36em; }
 .rf-runtime-connection { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .rf-runtime-connection p { flex-basis: 100%; overflow-wrap: anywhere; }

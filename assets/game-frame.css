@@ -1,4 +1,5 @@
 .rf-game-frame { position: relative; isolation: isolate; contain: layout paint; box-sizing: border-box; container-type: inline-size; width: 100%; max-width: var(--rf-game-max-width, 960px); aspect-ratio: var(--rf-game-aspect-ratio, 3 / 2); min-width: 0; overflow: hidden; color: #111; background: #eee; border: 1px solid #111; font: 12px/1.4 ui-monospace, monospace; }
+.rf-game-frame[data-chrome="none"] { max-width: none; border: 0; border-radius: 0; outline: 0; background: transparent; box-shadow: none; color: inherit; }
 .rf-game-frame *, .rf-frame-scrim * { box-sizing: border-box; }
 .rf-frame-chrome { position: absolute; inset: 0; display: flex; flex-direction: column; min-height: 0; }
 .rf-frame-toolbar { position: absolute; z-index: 2; left: 14px; right: 70px; bottom: 14px; min-width: 0; display: flex; align-items: center; gap: 8px; pointer-events: none; }

@@ -14,9 +14,11 @@ export type NakamaGameBackendOptions = Readonly<{
 
 const LOGIN_TTL_MS = 60 * 60 * 1000;
 const UNAVAILABLE = "Game server unavailable. Check your connection and retry.";
+const REJECTED_CREDENTIALS = new Set(["Sign-in message expired.", "Invalid signature.", "Signature does not match the account."]);
 type Signed = Readonly<{ message: string; signature: string }>;
 /** One signature per wallet, shared by every Friend backend on the page; sessionStorage carries it across page loads. */
 const signed = new Map<string, Signed>();
+const signing = new Map<string, Promise<Signed>>();
 
 function tokenExpiry(token: string): number {
   try {
@@ -47,14 +49,24 @@ export function createNakamaGameBackend(options: NakamaGameBackendOptions): Game
       const cached = JSON.parse(store?.getItem(cacheKey) ?? "null");
       if (usable(cached)) { signed.set(cacheKey, cached); return cached; }
     } catch { /* re-sign */ }
-    const message = walletLoginMessage({ account, expires: new Date(Date.now() + LOGIN_TTL_MS).toISOString() });
-    const value = { message, signature: await options.signMessage(message) };
-    signed.set(cacheKey, value);
-    try { store?.setItem(cacheKey, JSON.stringify(value)); } catch { /* storage unavailable */ }
-    return value;
+    const pendingSignature = signing.get(cacheKey);
+    if (pendingSignature) return pendingSignature;
+    // Friend switches and separate game backends may start while the wallet's
+    // first prompt is open. Share the whole credential, including its exact
+    // message, because independently generated expiry timestamps can differ.
+    const request = Promise.resolve().then(async () => {
+      const message = walletLoginMessage({ account, expires: new Date(Date.now() + LOGIN_TTL_MS).toISOString() });
+      const value = { message, signature: await options.signMessage(message) };
+      signed.set(cacheKey, value);
+      try { store?.setItem(cacheKey, JSON.stringify(value)); } catch { /* storage unavailable */ }
+      return value;
+    }).finally(() => { signing.delete(cacheKey); });
+    signing.set(cacheKey, request);
+    return request;
   }
   async function login(): Promise<string> {
     const vars = await credentials();
+    if (!alive) throw new Error("Game session changed.");
     let response: Response;
     try {
       response = await fetch(`${base}/v2/account/authenticate/custom?create=true`, { method: "POST",
@@ -62,9 +74,19 @@ export function createNakamaGameBackend(options: NakamaGameBackendOptions): Game
         body: JSON.stringify({ id: customId, vars }) });
     } catch { throw new Error(UNAVAILABLE); }
     if (!response.ok) {
-      signed.delete(cacheKey);
-      try { store?.removeItem(cacheKey); } catch { /* storage unavailable */ }
-      throw await readError(response, "Sign-in was rejected.");
+      const error = await readError(response, "Sign-in was rejected.");
+      // A Friend's eligibility or a server outage does not invalidate the
+      // wallet's signature for its other Friends. Nor may a delayed rejection
+      // remove credentials obtained after this request started.
+      if (error instanceof FriendRpcError && REJECTED_CREDENTIALS.has(error.message)) {
+        const current = signed.get(cacheKey);
+        if (current?.message === vars.message && current.signature === vars.signature) signed.delete(cacheKey);
+        try {
+          const cached = JSON.parse(store?.getItem(cacheKey) ?? "null");
+          if (cached?.message === vars.message && cached.signature === vars.signature) store?.removeItem(cacheKey);
+        } catch { /* storage unavailable */ }
+      }
+      throw error;
     }
     const body = await response.json();
     if (typeof body?.token !== "string") throw new Error(UNAVAILABLE);

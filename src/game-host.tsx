@@ -19,6 +19,8 @@ import { createFriendWalletSession, createFriendPublicClient, type FriendWalletP
 export type GameHostProps = {
   definition: ChanceGameDefinition;
   frameUrl: string;
+  /** Omit the SDK toolbar and visual shell; required gates and confirmations remain. */
+  chrome?: GameFrameProps["chrome"];
   /** Explicit live deployment; omit for simulated gameplay. */
   deployment?: LiveGameDeployment;
   /** Rules from the game's server.ts. They run in this browser unless `backend` names a Nakama server, where only the id is needed. */
@@ -40,7 +42,7 @@ export function GameHost({ walletProvider, publicClient, ...props }: GameHostPro
     setConnection({ provider: walletProvider, session });
     return () => session.dispose();
   }, [walletProvider]);
-  if (!connection || connection.provider !== walletProvider) return <GameFrame mode={props.deployment ? "live" : "preview"} friends={[]} selectedFriendId={null} friendsLoading>
+  if (!connection || connection.provider !== walletProvider) return <GameFrame chrome={props.chrome} mode={props.deployment ? "live" : "preview"} friends={[]} selectedFriendId={null} friendsLoading>
     <p className="rf-runtime-status" role="status">Loading wallet connection…</p>
   </GameFrame>;
   return <WalletViewport {...props} session={connection.session} publicClient={publicClient ?? defaultClient} />;
@@ -107,6 +109,8 @@ function WalletViewport({ session, publicClient, ...props }: Omit<GameHostProps,
 
 export type ConnectedGameHostProps = {
   definition: ChanceGameDefinition;
+  /** Use none when the surrounding site supplies the title, Friend selector and wallet UI. */
+  chrome?: GameFrameProps["chrome"];
   /** Optional integration with connection and selection already available in this project. */
   selectedFriend: GameFriend | null;
   account: string | null;
@@ -129,22 +133,22 @@ type Picker = Pick<GameFrameProps, "friends" | "onSelectFriend" | "connection" |
 /** SDK frame for a project that already supplies connection and selection. */
 export function ConnectedGameHost(props: ConnectedGameHostProps) { return <ConnectedViewport {...props} />; }
 
-function ConnectedViewport({ definition, selectedFriend, account, chainId, publicClient, frameUrl, revision = 0, picker, deployment, walletClient, assertActive, server, backend }: ConnectedGameHostProps & { picker?: Picker }) {
+function ConnectedViewport({ definition, selectedFriend, account, chainId, publicClient, frameUrl, revision = 0, picker, deployment, walletClient, assertActive, server, backend, chrome }: ConnectedGameHostProps & { picker?: Picker }) {
   const ledgerState = useRef({ definition, revision: 0, ledgers: new Map<string, PreviewGameClient>(), backends: new Map<string, GameBackend>() });
   if (ledgerState.current.definition !== definition) ledgerState.current = { definition, revision: ledgerState.current.revision + 1, ledgers: new Map(), backends: new Map() };
   const { ledgers, backends } = ledgerState.current;
   const key = JSON.stringify([selectedFriend?.id.toString(), selectedFriend?.walletAddress?.toLowerCase(), account?.toLowerCase(), chainId]);
   const sessionKey = `${key}:${revision}:${ledgerState.current.revision}:${deployment?.game ?? "preview"}:${backend ? `${backend.host}:${backend.port}` : "local"}`;
-  if (!selectedFriend || !account || chainId === null || !publicClient) return <GameFrame mode={deployment ? "live" : "preview"} selectionMode={picker ? "picker" : "host"}
+  if (!selectedFriend || !account || chainId === null || !publicClient) return <GameFrame chrome={chrome} mode={deployment ? "live" : "preview"} selectionMode={picker ? "picker" : "host"}
     friends={selectedFriend ? [selectedFriend] : []} selectedFriendId={selectedFriend?.id ?? null} {...picker}>
     <p className="rf-runtime-status" role="status">Connect a wallet and choose an owned hardwired Friend.</p>
   </GameFrame>;
-  return <EligibilityGate key={sessionKey} definition={definition} picker={picker} friend={selectedFriend} account={account} chainId={chainId} publicClient={publicClient}
+  return <EligibilityGate key={sessionKey} chrome={chrome} definition={definition} picker={picker} friend={selectedFriend} account={account} chainId={chainId} publicClient={publicClient}
     frameUrl={frameUrl} ledgers={ledgers} backends={backends} deployment={deployment} walletClient={walletClient} assertActive={assertActive} server={server} backend={backend} />;
 }
 
-function EligibilityGate({ definition, picker, friend, account, chainId, publicClient, frameUrl, ledgers, backends, deployment, walletClient, assertActive, server, backend }: {
-  definition: ChanceGameDefinition; picker?: Picker;
+function EligibilityGate({ definition, picker, friend, account, chainId, publicClient, frameUrl, ledgers, backends, deployment, walletClient, assertActive, server, backend, chrome }: {
+  definition: ChanceGameDefinition; picker?: Picker; chrome?: GameFrameProps["chrome"];
   friend: GameFriend; account: string; chainId: number; publicClient: GenerationIdentityClient; frameUrl: string;
   ledgers: Map<string, PreviewGameClient>; backends: Map<string, GameBackend>;
   deployment?: LiveGameDeployment; walletClient?: ConnectedGameHostProps["walletClient"]; assertActive?: () => void;
@@ -178,7 +182,7 @@ function EligibilityGate({ definition, picker, friend, account, chainId, publicC
   }, [publicClient, friend.id, account, chainId, attempt]);
   // A replaced read client invalidates verification during render, before effects.
   const checked = verification?.client === publicClient ? verification : null;
-  if (!checked?.eligible) return <GameFrame mode={deployment ? "live" : "preview"} selectionMode={picker ? "picker" : "host"} friends={[friend]} selectedFriendId={friend.id} {...picker}>
+  if (!checked?.eligible) return <GameFrame chrome={chrome} mode={deployment ? "live" : "preview"} selectionMode={picker ? "picker" : "host"} friends={[friend]} selectedFriendId={friend.id} {...picker}>
     <div className="rf-runtime-status" role={checked?.error ? "alert" : "status"}>
       <p>{checked?.error ?? "Checking ownership and hardwired eligibility…"}</p>
       {checked?.error && <button type="button" onClick={() => { setVerification(null); setAttempt(value => value + 1); }}>Retry eligibility</button>}
@@ -189,7 +193,7 @@ function EligibilityGate({ definition, picker, friend, account, chainId, publicC
     // The game server identifies the Friend, not the connected account; the account only proves control.
     const identity = { chainId, contract: GENERATION_SPRITE_MANIFEST.generations.toLowerCase(), tokenId: friend.id.toString() };
     if (backend) {
-      if (!walletClient?.signMessage) return <GameFrame mode={deployment ? "live" : "preview"} friends={[friend]} selectedFriendId={friend.id} {...picker}>
+      if (!walletClient?.signMessage) return <GameFrame chrome={chrome} mode={deployment ? "live" : "preview"} selectionMode={picker ? "picker" : "host"} friends={[friend]} selectedFriendId={friend.id} {...picker}>
         <p role="alert">Connect a wallet that can sign messages to reach the game server.</p>
       </GameFrame>;
       const signer = walletClient;
@@ -202,10 +206,10 @@ function EligibilityGate({ definition, picker, friend, account, chainId, publicC
     }
   }
   if (deployment) {
-    if (!walletClient) return <GameFrame mode="live" friends={[friend]} selectedFriendId={friend.id} {...picker}>
+    if (!walletClient) return <GameFrame chrome={chrome} mode="live" selectionMode={picker ? "picker" : "host"} friends={[friend]} selectedFriendId={friend.id} {...picker}>
       <p role="alert">Connect a wallet to send live game transactions.</p>
     </GameFrame>;
-    return <EmbeddedSession key={frameUrl} picker={picker} friend={{ ...friend, kind: "owned", walletAddress: checked.walletAddress }} gameBackend={gameBackend.current ?? undefined}
+    return <EmbeddedSession key={frameUrl} chrome={chrome} picker={picker} friend={{ ...friend, kind: "owned", walletAddress: checked.walletAddress }} gameBackend={gameBackend.current ?? undefined}
       definition={definition} frameUrl={frameUrl} live={{ definition, deployment, friendId: friend.id, account: account as Address,
         friendWallet: checked.walletAddress as Address,
         publicClient: publicClient as LiveGameOptions["publicClient"], walletClient, assertActive }} />;
@@ -216,11 +220,11 @@ function EligibilityGate({ definition, picker, friend, account, chainId, publicC
     ledgers.set(ledgerKey, client);
   }
   // Remount both the bridge and child on any identity/network/URL change.
-  return <EmbeddedSession key={frameUrl} picker={picker} friend={{ ...friend, kind: "owned", walletAddress: checked.walletAddress }} client={client} definition={definition} frameUrl={frameUrl} gameBackend={gameBackend.current ?? undefined} />;
+  return <EmbeddedSession key={frameUrl} chrome={chrome} picker={picker} friend={{ ...friend, kind: "owned", walletAddress: checked.walletAddress }} client={client} definition={definition} frameUrl={frameUrl} gameBackend={gameBackend.current ?? undefined} />;
 }
 
-function EmbeddedSession({ friend, client, definition, live, frameUrl, picker, gameBackend }: {
-  friend: GameFriend; client?: GameClient; definition: ChanceGameDefinition; live?: LiveGameOptions; frameUrl: string; picker?: Picker; gameBackend?: GameBackend;
+function EmbeddedSession({ friend, client, definition, live, frameUrl, picker, gameBackend, chrome }: {
+  friend: GameFriend; client?: GameClient; definition: ChanceGameDefinition; live?: LiveGameOptions; frameUrl: string; picker?: Picker; gameBackend?: GameBackend; chrome?: GameFrameProps["chrome"];
 }) {
   const liveRef = useRef(live); liveRef.current = live;
   const mode = live ? "live" : "preview";
@@ -380,7 +384,7 @@ function EmbeddedSession({ friend, client, definition, live, frameUrl, picker, g
       if (mounted.current) setFundMessage(cause instanceof Error ? cause.message : "RF transfer failed.");
     } finally { fundingRef.current = false; if (mounted.current) { setFunding(false); bridge.current?.setPaused(paused.current); } }
   }
-  return <GameFrame mode={mode} selectionMode={picker ? "picker" : "host"} friends={[friend]} selectedFriendId={friend.id}
+  return <GameFrame chrome={chrome} mode={mode} selectionMode={picker ? "picker" : "host"} friends={[friend]} selectedFriendId={friend.id}
     wallet={{ balance: snapshot?.rfBalance, status: snapshot ? "ready" : "loading" }}
     walletActions={live ? <div className="rf-runtime-connection">
       <p>Transfer RF from your connected wallet to this Friend to buy bait. This is a real RF transfer plus ETH gas.</p>
