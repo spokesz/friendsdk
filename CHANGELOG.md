@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+- `FriendIdentity.generation`: rules receive the Friend's generation as read on chain when
+  the session signed in. The Nakama hook already performed that read; it now keeps the value
+  in the session vars, so a promotion shows on the next sign-in. Local preview backends use
+  generation 1.
+
 ## 0.2.0
 
 - Added the game server: `server.ts` rules defined with `defineFriendGameServer`,

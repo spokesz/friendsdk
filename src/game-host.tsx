@@ -201,7 +201,7 @@ function EligibilityGate({ definition, picker, friend, account, chainId, publicC
         signMessage: message => signer.signMessage!({ account: account as Address, message }) });
     } else if ("rpcs" in server) {
       let local = backends.get(ledgerKey);
-      if (!local) { local = createLocalGameBackend(server, { ...identity, controller: account }); backends.set(ledgerKey, local); }
+      if (!local) { local = createLocalGameBackend(server, { ...identity, controller: account, generation: 1 /* previews read no chain; assume the best land */ }); backends.set(ledgerKey, local); }
       gameBackend.current = local;
     }
   }

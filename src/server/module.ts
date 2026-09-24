@@ -7,6 +7,8 @@ export type FriendIdentity = Readonly<{
   chainId: number; contract: string; tokenId: string;
   /** Wallet that proved control of the Friend when this session signed in. */
   controller: string;
+  /** Generation read on chain when this session signed in: 1 is the oldest land, 6 the newest. A promotion shows on the next sign-in. */
+  generation: number;
 }>;
 export type FriendRecord<T> = Readonly<{ value: T; version: string }>;
 export type FriendStorage = Readonly<{

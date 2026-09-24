@@ -10,7 +10,7 @@ import { createGamePreview, RF } from '../dist/game.js';
 const contract = '0x14C49e6118F46525dE9ab41a51cBAA3c6EBF181D';
 const friend = { chainId: 4663, contract, tokenId: '7730' };
 const owner = privateKeyToAccount(`0x${'11'.repeat(32)}`);
-const identity = { ...friend, contract: contract.toLowerCase(), controller: owner.address.toLowerCase() };
+const identity = { ...friend, contract: contract.toLowerCase(), controller: owner.address.toLowerCase(), generation: 1 };
 const counter = defineFriendGameServer({ id: 'counter', rpcs: {
   load(ctx) { return ctx.storage.get('state')?.value ?? { count: 0 }; },
   add(ctx, payload) {
@@ -105,7 +105,7 @@ test('the Nakama hooks verify ownership on chain and scope storage to the Friend
   const logger = { error() {}, info() {} };
   const result = beforeAuthenticateCustom(ctx, logger, nk, { create: true, account: { id: friendCustomId(friend), vars: { message, signature } } });
   assert.deepEqual(result, { create: true, username: 'rf-4663-7730', account: { id: friendCustomId(friend),
-    vars: { controller: owner.address.toLowerCase(), chainId: '4663', contract: contract.toLowerCase(), tokenId: '7730' } } });
+    vars: { controller: owner.address.toLowerCase(), chainId: '4663', contract: contract.toLowerCase(), tokenId: '7730', generation: '1' } } });
   assert.deepEqual(calls, [['https://rpc.test', contract.toLowerCase()], ['https://rpc.test', contract.toLowerCase()]]);
   assert.throws(() => beforeAuthenticateCustom(ctx, logger, nk, { create: true, account: { id: friendCustomId(friend), vars: { message, signature: `0x${'00'.repeat(65)}` } } }), { code: 16 });
 

@@ -58,7 +58,7 @@ export function verifyFriendLogin(input: Readonly<{ customId: string; message: s
   const friend = input.read(key.contract, key.tokenId);
   if (friend.owner.toLowerCase() !== login.account) throw new FriendRpcError("The signing account does not own this Friend.");
   if (friend.generation < 1) throw new FriendRpcError("This Friend is not hardwired.");
-  return Object.freeze({ chainId: key.chainId, contract: key.contract, tokenId: key.tokenId, controller: login.account });
+  return Object.freeze({ chainId: key.chainId, contract: key.contract, tokenId: key.tokenId, controller: login.account, generation: friend.generation });
 }
 
 const selector = (signature: string) => hex(keccak_256(utf8(signature))).slice(0, 8);
@@ -94,7 +94,7 @@ export function beforeAuthenticateCustom(ctx: nkruntime.Context, logger: nkrunti
     throw fail("Sign-in is unavailable. Try again.", INTERNAL);
   }
   return { create: data.create, username: `rf-${friend.chainId}-${friend.tokenId}`,
-    account: { id: account.id, vars: { controller: friend.controller, chainId: String(friend.chainId), contract: friend.contract, tokenId: friend.tokenId } } };
+    account: { id: account.id, vars: { controller: friend.controller, chainId: String(friend.chainId), contract: friend.contract, tokenId: friend.tokenId, generation: String(friend.generation) } } };
 }
 
 function storageFor(nk: nkruntime.Nakama, userId: string, collection: string): FriendStorage {
@@ -129,8 +129,8 @@ function activityFor(nk: nkruntime.Nakama, userId: string): Record<string, numbe
 /** Called from the generated entrypoint's named RPC functions; Nakama requires those to be top-level declarations. */
 export function callFriendRpc(server: FriendGameServer, name: string, ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkruntime.Nakama, payload: string): string {
   const vars = ctx.vars ?? {};
-  if (!ctx.userId || !vars.controller || !vars.tokenId || !vars.contract) throw fail("Sign in with a Friend first.", UNAUTHENTICATED);
-  const friend: FriendIdentity = { chainId: Number(vars.chainId), contract: vars.contract, tokenId: vars.tokenId, controller: vars.controller };
+  if (!ctx.userId || !vars.controller || !vars.tokenId || !vars.contract || !vars.generation) throw fail("Sign in with a Friend first.", UNAUTHENTICATED);
+  const friend: FriendIdentity = { chainId: Number(vars.chainId), contract: vars.contract, tokenId: vars.tokenId, controller: vars.controller, generation: Number(vars.generation) };
   let input: unknown = null;
   if (payload) {
     try { input = JSON.parse(payload); } catch { throw fail("Invalid payload.", INVALID_ARGUMENT); }
