@@ -127,35 +127,38 @@ export type ConnectedGameHostProps = {
   /** Required with a deployment (transactions) or a backend (sign-in message). Stays in the trusted runtime. */
   walletClient?: ChanceWalletClient & Partial<Pick<WalletClient, "signMessage">>;
   assertActive?: () => void;
+  /** A Friend held by this custody contract and assigned to `account` by a grant service; `ticket` returns its current signed ticket. */
+  custody?: FriendCustodyGrant;
 };
+export type FriendCustodyGrant = Readonly<{ contract: Address; ticket(): Promise<Readonly<{ message: string; signature: string }>> }>;
 type Picker = Pick<GameFrameProps, "friends" | "onSelectFriend" | "connection" | "friendsLoading" | "friendsError" | "friendsEmptyMessage" | "friendsHiddenCount" | "onConnect">;
 
 /** SDK frame for a project that already supplies connection and selection. */
 export function ConnectedGameHost(props: ConnectedGameHostProps) { return <ConnectedViewport {...props} />; }
 
-function ConnectedViewport({ definition, selectedFriend, account, chainId, publicClient, frameUrl, revision = 0, picker, deployment, walletClient, assertActive, server, backend, chrome }: ConnectedGameHostProps & { picker?: Picker }) {
+function ConnectedViewport({ definition, selectedFriend, account, chainId, publicClient, frameUrl, revision = 0, picker, deployment, walletClient, assertActive, server, backend, chrome, custody }: ConnectedGameHostProps & { picker?: Picker }) {
   const ledgerState = useRef({ definition, revision: 0, ledgers: new Map<string, PreviewGameClient>(), backends: new Map<string, GameBackend>() });
   if (ledgerState.current.definition !== definition) ledgerState.current = { definition, revision: ledgerState.current.revision + 1, ledgers: new Map(), backends: new Map() };
   const { ledgers, backends } = ledgerState.current;
   const key = JSON.stringify([selectedFriend?.id.toString(), selectedFriend?.walletAddress?.toLowerCase(), account?.toLowerCase(), chainId]);
-  const sessionKey = `${key}:${revision}:${ledgerState.current.revision}:${deployment?.game ?? "preview"}:${backend ? `${backend.host}:${backend.port}` : "local"}`;
+  const sessionKey = `${key}:${revision}:${ledgerState.current.revision}:${deployment?.game ?? "preview"}:${backend ? `${backend.host}:${backend.port}` : "local"}:${custody?.contract.toLowerCase() ?? ""}`;
   if (!selectedFriend || !account || chainId === null || !publicClient) return <GameFrame chrome={chrome} mode={deployment ? "live" : "preview"} selectionMode={picker ? "picker" : "host"}
     friends={selectedFriend ? [selectedFriend] : []} selectedFriendId={selectedFriend?.id ?? null} {...picker}>
     <p className="rf-runtime-status" role="status">Connect a wallet and choose an owned hardwired Friend.</p>
   </GameFrame>;
   return <EligibilityGate key={sessionKey} chrome={chrome} definition={definition} picker={picker} friend={selectedFriend} account={account} chainId={chainId} publicClient={publicClient}
-    frameUrl={frameUrl} ledgers={ledgers} backends={backends} deployment={deployment} walletClient={walletClient} assertActive={assertActive} server={server} backend={backend} />;
+    frameUrl={frameUrl} ledgers={ledgers} backends={backends} deployment={deployment} walletClient={walletClient} assertActive={assertActive} server={server} backend={backend} custody={custody} />;
 }
 
-function EligibilityGate({ definition, picker, friend, account, chainId, publicClient, frameUrl, ledgers, backends, deployment, walletClient, assertActive, server, backend, chrome }: {
+function EligibilityGate({ definition, picker, friend, account, chainId, publicClient, frameUrl, ledgers, backends, deployment, walletClient, assertActive, server, backend, chrome, custody }: {
   definition: ChanceGameDefinition; picker?: Picker; chrome?: GameFrameProps["chrome"];
   friend: GameFriend; account: string; chainId: number; publicClient: GenerationIdentityClient; frameUrl: string;
   ledgers: Map<string, PreviewGameClient>; backends: Map<string, GameBackend>;
   deployment?: LiveGameDeployment; walletClient?: ConnectedGameHostProps["walletClient"]; assertActive?: () => void;
-  server?: ConnectedGameHostProps["server"]; backend?: NakamaBackend;
+  server?: ConnectedGameHostProps["server"]; backend?: NakamaBackend; custody?: FriendCustodyGrant;
 }) {
   const [attempt, setAttempt] = useState(0);
-  const [verification, setVerification] = useState<{ client: GenerationIdentityClient; eligible: boolean; walletAddress?: string; error?: string } | null>(null);
+  const [verification, setVerification] = useState<{ client: GenerationIdentityClient; eligible: boolean; custodied?: boolean; walletAddress?: string; error?: string } | null>(null);
   const gameBackend = useRef<GameBackend | null>(null);
   useEffect(() => () => { gameBackend.current?.close(); gameBackend.current = null; }, []);
   useEffect(() => {
@@ -165,21 +168,22 @@ function EligibilityGate({ definition, picker, friend, account, chainId, publicC
       setVerification({ client: publicClient, eligible: false, error: "Switch your wallet to Robinhood mainnet (4663)." });
       return () => { alive = false; };
     }
-    void readGenerationEligibility(publicClient, friend.id, account as Address).then(async result => {
+    void readGenerationEligibility(publicClient, friend.id, account as Address, undefined, custody?.contract).then(async result => {
       let walletAddress: string | undefined;
       if (result.eligible) {
         walletAddress = await publicClient.readContract({ address: GENERATION_SPRITE_MANIFEST.generations, abi: WALLET_ABI,
           functionName: "tokenBoundAccount", args: [friend.id], blockNumber: result.blockNumber });
         if (!isAddress(walletAddress) || walletAddress.toLowerCase() === zeroAddress) throw new Error("Invalid canonical Friend wallet.");
       }
-      if (alive) setVerification({ client: publicClient, eligible: result.eligible === true, walletAddress,
-        error: result.eligible ? undefined : "The connected account must own this hardwired Generations Friend (generation 1 or higher)." });
+      if (alive) setVerification({ client: publicClient, eligible: result.eligible === true, custodied: result.custodied, walletAddress,
+        error: result.eligible ? undefined : result.custodied ? "This Friend belongs to another wallet."
+          : "The connected account must own this hardwired Generations Friend (generation 1 or higher)." });
     }).catch(cause => {
       if (alive) setVerification({ client: publicClient, eligible: false,
         error: `Could not verify this Friend. ${cause instanceof Error ? cause.message : "Try again."}` });
     });
     return () => { alive = false; };
-  }, [publicClient, friend.id, account, chainId, attempt]);
+  }, [publicClient, friend.id, account, chainId, attempt, custody]);
   // A replaced read client invalidates verification during render, before effects.
   const checked = verification?.client === publicClient ? verification : null;
   if (!checked?.eligible) return <GameFrame chrome={chrome} mode={deployment ? "live" : "preview"} selectionMode={picker ? "picker" : "host"} friends={[friend]} selectedFriendId={friend.id} {...picker}>
@@ -198,7 +202,8 @@ function EligibilityGate({ definition, picker, friend, account, chainId, publicC
       </GameFrame>;
       const signer = walletClient;
       gameBackend.current = createNakamaGameBackend({ backend, gameId: server.id, friend: identity, account,
-        signMessage: message => signer.signMessage!({ account: account as Address, message }) });
+        signMessage: message => signer.signMessage!({ account: account as Address, message }),
+        ...(checked.custodied && custody ? { custodyTicket: custody.ticket } : {}) });
     } else if ("rpcs" in server) {
       let local = backends.get(ledgerKey);
       if (!local) { local = createLocalGameBackend(server, { ...identity, controller: account, generation: 1 /* previews read no chain; assume the best land */ }); backends.set(ledgerKey, local); }

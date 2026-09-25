@@ -5,7 +5,7 @@
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { keccak_256 } from "@noble/hashes/sha3";
 import { FriendRpcError, type FriendGameServer, type FriendIdentity, type FriendStorage } from "./module.js";
-import { parseFriendCustomId, parseWalletLogin } from "./login.js";
+import { friendCustomId, parseCustodyTicket, parseFriendCustomId, parseWalletLogin } from "./login.js";
 
 // nkruntime.Codes values; the enum exists only in the type definitions.
 const INVALID_ARGUMENT = 3, INTERNAL = 13, UNAUTHENTICATED = 16;
@@ -45,9 +45,27 @@ export function recoverSigner(message: string, signature: string): string {
 }
 
 export type FriendChainRead = (contract: string, tokenId: string) => Readonly<{ owner: string; generation: number }>;
+const ZERO = "0x0000000000000000000000000000000000000000";
+
+/**
+ * Custody sign-in: a Friend held by `contract` may be played by the wallet named in
+ * a ticket from `signer`, unless custody has already bound it on chain to another wallet.
+ */
+export type FriendCustody = Readonly<{ contract: string; signer: string; beneficiary(tokenId: string): string }>;
+
+function verifyCustodyTicket(customId: string, account: string, tokenId: string, now: number, custody: FriendCustody, message: string, signature: string): void {
+  const ticket = parseCustodyTicket(message);
+  if (!ticket) throw new FriendRpcError("This Friend is held in custody. Sign in with its custody ticket.");
+  if (ticket.friend !== customId || ticket.account !== account) throw new FriendRpcError("The custody ticket is for another Friend or wallet.");
+  if (!(Date.parse(ticket.expires) > now)) throw new FriendRpcError("Custody ticket expired.");
+  if (recoverSigner(message, signature) !== custody.signer.toLowerCase()) throw new FriendRpcError("Invalid custody ticket.");
+  const bound = custody.beneficiary(tokenId).toLowerCase();
+  if (bound !== ZERO && bound !== account) throw new FriendRpcError("This Friend belongs to another wallet.");
+}
 
 /** Verify a wallet's signed login for the Friend named by the custom ID. Pure; chain reads are supplied. */
-export function verifyFriendLogin(input: Readonly<{ customId: string; message: string; signature: string; now: number; generations: string; read: FriendChainRead }>): FriendIdentity {
+export function verifyFriendLogin(input: Readonly<{ customId: string; message: string; signature: string; now: number; generations: string; read: FriendChainRead;
+  custody?: FriendCustody; ticket?: string; ticketSignature?: string }>): FriendIdentity {
   const key = parseFriendCustomId(input.customId);
   if (!key) throw new FriendRpcError("Unrecognized Friend account.");
   if (key.contract !== input.generations.toLowerCase()) throw new FriendRpcError("Unknown Friend collection.");
@@ -56,13 +74,16 @@ export function verifyFriendLogin(input: Readonly<{ customId: string; message: s
   if (!(Date.parse(login.expires) > input.now)) throw new FriendRpcError("Sign-in message expired.");
   if (recoverSigner(input.message, input.signature) !== login.account) throw new FriendRpcError("Signature does not match the account.");
   const friend = input.read(key.contract, key.tokenId);
-  if (friend.owner.toLowerCase() !== login.account) throw new FriendRpcError("The signing account does not own this Friend.");
+  if (friend.owner.toLowerCase() !== login.account) {
+    if (!input.custody || friend.owner.toLowerCase() !== input.custody.contract.toLowerCase()) throw new FriendRpcError("The signing account does not own this Friend.");
+    verifyCustodyTicket(friendCustomId(key), login.account, key.tokenId, input.now, input.custody, input.ticket ?? "", input.ticketSignature ?? "");
+  }
   if (friend.generation < 1) throw new FriendRpcError("This Friend is not hardwired.");
   return Object.freeze({ chainId: key.chainId, contract: key.contract, tokenId: key.tokenId, controller: login.account, generation: friend.generation });
 }
 
 const selector = (signature: string) => hex(keccak_256(utf8(signature))).slice(0, 8);
-const OWNER_OF = selector("ownerOf(uint256)"), GENERATION = selector("generation(uint256)");
+const OWNER_OF = selector("ownerOf(uint256)"), GENERATION = selector("generation(uint256)"), BENEFICIARY = selector("beneficiary(uint256)");
 
 function ethCall(nk: nkruntime.Nakama, url: string, to: string, data: string): string {
   const response = nk.httpRequest(url, "post", { "Content-Type": "application/json" },
@@ -80,14 +101,26 @@ export function readFriendOnChain(nk: nkruntime.Nakama, url: string, contract: s
   });
 }
 
-/** Register with `initializer.registerBeforeAuthenticateCustom`. Only a wallet that owns the Friend can sign in as it. */
+/** FriendCustody's permanent on-chain binding; zero until a paid action binds the Friend. */
+export function readCustodyBeneficiary(nk: nkruntime.Nakama, url: string, custody: string, tokenId: string): string {
+  return `0x${ethCall(nk, url, custody, `0x${BENEFICIARY}${BigInt(tokenId).toString(16).padStart(64, "0")}`).slice(24)}`;
+}
+
+/**
+ * Register with `initializer.registerBeforeAuthenticateCustom`. A wallet that owns the Friend can sign in as it.
+ * With CUSTODY_CONTRACT and CUSTODY_TICKET_SIGNER set, so can the wallet named by a custody ticket for a Friend custody holds.
+ */
 export function beforeAuthenticateCustom(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkruntime.Nakama, data: nkruntime.AuthenticateCustomRequest): nkruntime.AuthenticateCustomRequest {
   const account = data.account ?? {}, vars = account.vars ?? {};
+  const url = ctx.env.CHAIN_RPC_URL ?? RPC_URL, custodyContract = ctx.env.CUSTODY_CONTRACT, custodySigner = ctx.env.CUSTODY_TICKET_SIGNER;
   let friend: FriendIdentity;
   try {
     friend = verifyFriendLogin({ customId: account.id ?? "", message: vars.message ?? "", signature: vars.signature ?? "", now: Date.now(),
       generations: ctx.env.GENERATIONS_CONTRACT ?? GENERATIONS,
-      read: (contract, tokenId) => readFriendOnChain(nk, ctx.env.CHAIN_RPC_URL ?? RPC_URL, contract, tokenId) });
+      read: (contract, tokenId) => readFriendOnChain(nk, url, contract, tokenId),
+      custody: custodyContract && custodySigner ? { contract: custodyContract, signer: custodySigner,
+        beneficiary: tokenId => readCustodyBeneficiary(nk, url, custodyContract, tokenId) } : undefined,
+      ticket: vars.ticket, ticketSignature: vars.ticketSignature });
   } catch (error) {
     if (error instanceof FriendRpcError) throw fail(error.message, UNAUTHENTICATED);
     logger.error("Friend sign-in failed: %s", String(error));

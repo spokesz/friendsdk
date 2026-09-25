@@ -23,3 +23,20 @@ export function parseWalletLogin(message: string): WalletLogin | null {
   const match = MESSAGE.exec(message);
   return match ? Object.freeze({ account: match[1], expires: match[2] }) : null;
 }
+
+/**
+ * Custody ticket: a grant service's signed statement that `account` may play a
+ * Friend held by the custody contract. Expiry bounds how long an off-chain
+ * assignment is honoured without asking the service again.
+ */
+export type CustodyTicket = Readonly<{ friend: string; account: string; expires: string }>;
+const TICKET = /^Rare Friends custody ticket\nFriend: (rf:[^\n]+)\nAccount: (0x[0-9a-f]{40})\nExpires: ([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z)$/;
+
+export function custodyTicketMessage(ticket: Readonly<{ friend: FriendKey; account: string; expires: string }>): string {
+  return `Rare Friends custody ticket\nFriend: ${friendCustomId(ticket.friend)}\nAccount: ${ticket.account.toLowerCase()}\nExpires: ${ticket.expires}`;
+}
+
+export function parseCustodyTicket(message: string): CustodyTicket | null {
+  const match = TICKET.exec(message);
+  return match && parseFriendCustomId(match[1]) ? Object.freeze({ friend: match[1], account: match[2], expires: match[3] }) : null;
+}

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.2
+
+- Custody sign-in: with `CUSTODY_CONTRACT` and `CUSTODY_TICKET_SIGNER` set, Nakama also
+  signs in the wallet named by a grant service's signed custody ticket for a Friend the
+  custody contract holds, unless custody has bound it on chain to another wallet.
+  `ConnectedGameHost` accepts `custody`, `createNakamaGameBackend` accepts `custodyTicket`,
+  and `readGenerationEligibility` accepts a custody address and reports `custodied`.
+  Without the variables, sign-in is unchanged.
+
 ## 0.2.1
 
 - `FriendIdentity.generation`: rules receive the Friend's generation as read on chain when

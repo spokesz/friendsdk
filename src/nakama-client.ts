@@ -10,6 +10,8 @@ export type NakamaGameBackendOptions = Readonly<{
   account: string;
   /** personal_sign through the connected wallet. Called at most once per hour per wallet; one signature covers every Friend it holds. */
   signMessage(message: string): Promise<string>;
+  /** For a Friend held by custody: the grant service's current ticket naming `account`. Called at every sign-in; cache it until near expiry. */
+  custodyTicket?(): Promise<Readonly<{ message: string; signature: string }>>;
 }>;
 
 const LOGIN_TTL_MS = 60 * 60 * 1000;
@@ -67,11 +69,13 @@ export function createNakamaGameBackend(options: NakamaGameBackendOptions): Game
   async function login(): Promise<string> {
     const vars = await credentials();
     if (!alive) throw new Error("Game session changed.");
+    const ticket = options.custodyTicket ? await options.custodyTicket() : null;
+    if (!alive) throw new Error("Game session changed.");
     let response: Response;
     try {
       response = await fetch(`${base}/v2/account/authenticate/custom?create=true`, { method: "POST",
         headers: { Authorization: `Basic ${btoa(`${backend.serverKey}:`)}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ id: customId, vars }) });
+        body: JSON.stringify({ id: customId, vars: ticket ? { ...vars, ticket: ticket.message, ticketSignature: ticket.signature } : vars }) });
     } catch { throw new Error(UNAVAILABLE); }
     if (!response.ok) {
       const error = await readError(response, "Sign-in was rejected.");

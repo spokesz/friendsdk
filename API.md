@@ -92,7 +92,7 @@ confirmations in the runtime. See [layout examples](HOST_INTEGRATION.md#react-ru
 | --- | --- |
 | `runtime` | `GameHost`, `ConnectedGameHost`, `GameSession`, `GameComponentProps`, `GameServerClient`, `createNakamaGameBackend`, `NakamaBackend`, `createLiveGameClient`, `LiveGameDeployment`, `LIVE_GAME_MAX_ORACLE_FEE`. Preview/live runtime, game server connection and child session. |
 | `server` | `defineFriendGameServer`, `FriendRpcError`, `FriendRpcContext`, `FriendStorage`, `FriendIdentity`, `createLocalGameBackend`, `friendCustomId`, `parseFriendCustomId`, `walletLoginMessage`, `parseWalletLogin`. Game rules that run in the browser preview and on Nakama. |
-| `server/nakama` | `beforeAuthenticateCustom`, `callFriendRpc`, `verifyFriendLogin`, `recoverSigner`, `readFriendOnChain`. Nakama runtime adapter; bundled by the CLI, never imported by browser code. |
+| `server/nakama` | `beforeAuthenticateCustom`, `callFriendRpc`, `verifyFriendLogin`, `recoverSigner`, `readFriendOnChain`, `readCustodyBeneficiary`. Nakama runtime adapter; bundled by the CLI, never imported by browser code. |
 | `world-view` | Optional `GameWorld` utility with canonical Friend sprites and keyboard/touch movement. Import `world-view.css` when using it. |
 | `world` | Optional world utilities: `WORLD_PRESETS`, `getWorldPreset`, `validateWorld`, `renderWorld`, `renderWorldLayers`, `renderProp`, `project`, `unproject`, `isWorldWalkable`. Geometry, props, collision and depth sorting. |
 | `navigation` | `createWorldNavigator(world, radius?, spacing?)`: collision-checked `route(from, to)` and `segmentClear(from, to)`. |
@@ -395,6 +395,18 @@ controller in its variables. Storage objects are written with read
 permission 1 and write permission 0, so clients can read their own state but only
 rules change it. A session lasts `session.token_expiry_sec`; re-signing in
 rechecks ownership, which is how a transferred Friend leaves its old controller.
+
+A Friend held by a custody contract can also be played by a wallet that does not
+own it, when a grant service has assigned it off chain. Set `CUSTODY_CONTRACT` and
+`CUSTODY_TICKET_SIGNER` (the grant service's signing address) in Nakama's runtime
+env. The sign-in then also accepts `vars.ticket` and `vars.ticketSignature`: a
+`Rare Friends custody ticket` message naming the Friend's custom ID, the signing
+wallet and an expiry, signed by that address. The hook requires `ownerOf` to be
+the custody contract and its `beneficiary(tokenId)` to be zero or the signing
+wallet, so an on-chain binding always overrides a ticket. Without both variables
+the custody path is off. Hosts pass `custody={{ contract, ticket }}` to
+`ConnectedGameHost`, or `custodyTicket` to `createNakamaGameBackend`; the ticket
+callback runs at every sign-in.
 
 ## Sandbox and bridge
 
