@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.3
+
+- Cache Nakama wallet login signatures for 24 hours instead of one hour. The
+  existing one-minute renewal margin, shared pending signature requests and
+  per-Friend ownership checks remain in place. Existing signed messages keep
+  their original expiry until the next signature is requested.
+
 ## 0.2.2
 
 - Custody sign-in: with `CUSTODY_CONTRACT` and `CUSTODY_TICKET_SIGNER` set, Nakama also

@@ -8,13 +8,13 @@ export type NakamaGameBackendOptions = Readonly<{
   backend: NakamaBackend; gameId: string;
   friend: Readonly<{ chainId: number; contract: string; tokenId: string }>;
   account: string;
-  /** personal_sign through the connected wallet. Called at most once per hour per wallet; one signature covers every Friend it holds. */
+  /** personal_sign through the connected wallet. Cached for 24 hours per wallet; one signature covers every Friend it holds. */
   signMessage(message: string): Promise<string>;
   /** For a Friend held by custody: the grant service's current ticket naming `account`. Called at every sign-in; cache it until near expiry. */
   custodyTicket?(): Promise<Readonly<{ message: string; signature: string }>>;
 }>;
 
-const LOGIN_TTL_MS = 60 * 60 * 1000;
+const LOGIN_TTL_MS = 24 * 60 * 60 * 1000;
 const UNAVAILABLE = "Game server unavailable. Check your connection and retry.";
 const REJECTED_CREDENTIALS = new Set(["Sign-in message expired.", "Invalid signature.", "Signature does not match the account."]);
 type Signed = Readonly<{ message: string; signature: string }>;

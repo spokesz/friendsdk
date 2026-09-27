@@ -1,6 +1,6 @@
 {
   "name": "@rarefriends/friendsdk",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Rare Friends game building blocks, chance-game reference and Friend-scoped game server",
   "type": "module",
   "license": "Apache-2.0",

@@ -386,7 +386,7 @@ runtime module containing the rules, `beforeAuthenticateCustom` and one named
 RPC function per rule (Nakama registers handlers by top-level name). When
 `NAKAMA_HOST` is set, the host runtime instead signs in through Nakama and
 forwards calls: the wallet signs one `Rare Friends login` message naming only
-the wallet (`personal_sign`, cached for an hour and shared by every Friend it
+the wallet (`personal_sign`, cached for 24 hours and shared by every Friend it
 holds, so switching Friends never prompts again). Each sign-in names a Friend by
 custom ID `rf:<chainId>:<contract>:<tokenId>`; Nakama's hook recovers the signer,
 reads that Friend's `ownerOf` and `generation` on the Generations contract

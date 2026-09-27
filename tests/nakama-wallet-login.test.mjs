@@ -36,7 +36,7 @@ test('concurrent Friends and games share one wallet prompt and the exact signed 
   assert.equal(calls.length, 0, 'No server request starts before the wallet accepts');
   const login = parseWalletLogin(prompts[0]);
   assert.equal(login.account, account);
-  assert.ok(Date.parse(login.expires) > Date.now() + 59 * 60 * 1000);
+  assert.ok(Date.parse(login.expires) > Date.now() + (24 * 60 - 1) * 60 * 1000);
   signature.resolve('accepted-signature');
   await Promise.all(reads);
   const auth = calls.filter(call => call.path.includes('/authenticate/custom'));
@@ -170,7 +170,7 @@ test('a delayed old credential rejection cannot discard a newer wallet signature
   const old = createNakamaGameBackend(options);
   const rejected = assert.rejects(old.rpc('read', undefined), /expired/);
   while (!authCalls) await Promise.resolve();
-  now += 60 * 60 * 1000;
+  now += 24 * 60 * 60 * 1000;
   const newer = createNakamaGameBackend({ ...options, friend: { ...friend, tokenId: '22' } });
   await newer.rpc('read', undefined);
   assert.equal(signatures, 2);
