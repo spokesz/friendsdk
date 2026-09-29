@@ -57,10 +57,21 @@ test('preview and live CLI outputs remain separate, portable static bundles with
   try {
     await exec(process.execPath, [script, 'build', fishing, '--outdir', preview]);
     const originalPreview = await readFile(join(preview, 'runtime.js'), 'utf8');
+    const previewGame = await readFile(join(preview, 'game.js'), 'utf8');
     assert(!originalPreview.includes(deployment.game), 'The default preview does not enable the live deployment');
     await exec(process.execPath, [script, 'build', fishing, '--deployment', config, '--outdir', live]);
+    const liveRuntime = await readFile(join(live, 'runtime.js'), 'utf8');
     assert.equal(await readFile(join(preview, 'runtime.js'), 'utf8'), originalPreview, 'A live build cannot overwrite the preview');
-    assert((await readFile(join(live, 'runtime.js'), 'utf8')).includes(deployment.game), 'Only the live host receives the deployment');
+    assert(liveRuntime.includes(deployment.game), 'Only the live host receives the deployment');
+    const liveOnlyMarkers = ['eth_sendTransaction', 'wallet_sendTransaction', 'writeContract',
+      'eth_signTypedData_v4', 'personal_sign',
+      'function approve(address spender, uint256 amount) returns (bool)',
+      'function transfer(address to, uint256 value) returns (bool)'];
+    for (const marker of [...liveOnlyMarkers, 'eth_sendRawTransaction', 'sendRawTransaction']) {
+      assert(!originalPreview.includes(marker), `Preview excludes ${marker}`);
+      assert(!previewGame.includes(marker), `Sandbox excludes ${marker}`);
+    }
+    for (const marker of liveOnlyMarkers) assert(liveRuntime.includes(marker), `Live build retains ${marker}`);
     for (const output of [preview, live]) {
       const files = await readdir(output);
       assert.deepEqual(files.sort(), ['.friendsdk-output.json', 'game-layout.css', 'game.css', 'game.html', 'game.js', 'index.html', 'layout.css', 'runtime.css', 'runtime.js']);

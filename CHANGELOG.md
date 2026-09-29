@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4
+
+- Excluded live RF transfer, approval, signing and unused raw-transaction code from CLI
+  preview bundles while retaining wallet connection and fresh ownership checks.
+- Kept the live transaction path unchanged for explicit `--deployment` builds.
+
 ## 0.1.3
 
 - Fixed owned Friend discovery on the default Robinhood RPC by starting at the

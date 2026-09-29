@@ -12,7 +12,11 @@ import { fundFriendWallet } from "./friend-funding.js";
 import type { ChanceWalletClient } from "./chain.js";
 import { readGenerationEligibility, type GenerationIdentityClient } from "./identity.js";
 import { readOwnedFriends, type OwnedFriendsClient, type OwnedFriend } from "./owned-friends.js";
+import { createFriendReadClient } from "./read-client.js";
 import { createFriendWalletSession, createFriendPublicClient, type FriendWalletProvider, type FriendWalletSession } from "./wallet.js";
+
+// Keep checks inline so the CLI can replace them and esbuild can discard live-only branches.
+type RuntimeGlobal = typeof globalThis & { __FRIENDSDK_LIVE__?: boolean };
 
 export type GameHostProps = {
   definition: ChanceGameDefinition;
@@ -28,7 +32,9 @@ export type GameHostProps = {
 /** Complete game runtime: connection, owned Friends, verification, frame and confirmations. */
 export function GameHost({ walletProvider, publicClient, ...props }: GameHostProps) {
   const [connection, setConnection] = useState<{ provider: FriendWalletProvider | undefined; session: FriendWalletSession } | null>(null);
-  const [defaultClient] = useState(() => createFriendPublicClient({ batch: Boolean(props.deployment) }));
+  const [defaultClient] = useState(() => (globalThis as RuntimeGlobal).__FRIENDSDK_LIVE__ !== false
+    ? createFriendPublicClient({ batch: Boolean(props.deployment) })
+    : createFriendReadClient(GENERATION_SPRITE_MANIFEST.rpcUrl));
   useEffect(() => {
     const session = createFriendWalletSession({ provider: walletProvider });
     setConnection({ provider: walletProvider, session });
@@ -45,7 +51,7 @@ function WalletViewport({ session, publicClient, ...props }: Omit<GameHostProps,
 }) {
   const wallet = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
   const provider = session.getProvider();
-  const walletClient = useMemo(() => provider && wallet.account && props.deployment ? createWalletClient({
+  const walletClient = useMemo(() => (globalThis as RuntimeGlobal).__FRIENDSDK_LIVE__ !== false && provider && wallet.account && props.deployment ? createWalletClient({
     account: wallet.account, chain: defineChain({ id: props.deployment.chainId, name: "Robinhood",
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
       rpcUrls: { default: { http: [GENERATION_SPRITE_MANIFEST.rpcUrl] } } }),
@@ -173,7 +179,7 @@ function EligibilityGate({ definition, picker, friend, account, chainId, publicC
       {checked?.error && <button type="button" onClick={() => { setVerification(null); setAttempt(value => value + 1); }}>Retry eligibility</button>}
     </div>
   </GameFrame>;
-  if (deployment) {
+  if ((globalThis as RuntimeGlobal).__FRIENDSDK_LIVE__ !== false && deployment) {
     if (!walletClient) return <GameFrame mode="live" friends={[friend]} selectedFriendId={friend.id} {...picker}>
       <p role="alert">Connect a wallet to send live game transactions.</p>
     </GameFrame>;
@@ -196,7 +202,7 @@ function EmbeddedSession({ friend, client, definition, live, frameUrl, picker }:
   friend: GameFriend; client?: GameClient; definition: ChanceGameDefinition; live?: LiveGameOptions; frameUrl: string; picker?: Picker;
 }) {
   const liveRef = useRef(live); liveRef.current = live;
-  const mode = live ? "live" : "preview";
+  const mode = (globalThis as RuntimeGlobal).__FRIENDSDK_LIVE__ !== false && live ? "live" : "preview";
   const epoch = useRef(0);
   const mounted = useRef(false);
   const [fundAmount, setFundAmount] = useState("1");
@@ -266,11 +272,12 @@ function EmbeddedSession({ friend, client, definition, live, frameUrl, picker }:
         pending.current = () => finish(false);
         setConfirmation({
           title: method === "buy" ? `Buy ${definition.consumable.toLowerCase()}` : method === "play" ? `Use ${definition.consumable.toLowerCase()}` : method === "settle" ? "Resolve result" : "Redeem reward",
-          description: method === "buy" ? `${quantity} ${definition.consumable.toLowerCase()} for ${friend.label}.${liveRef.current ? " Approves the exact RF cost, then purchases with the Friend wallet. Each transaction requires your wallet confirmation and ETH gas." : ""}`
+          description: method === "buy" ? `${quantity} ${definition.consumable.toLowerCase()} for ${friend.label}.${(globalThis as RuntimeGlobal).__FRIENDSDK_LIVE__ !== false && liveRef.current ? " Approves the exact RF cost, then purchases with the Friend wallet. Each transaction requires your wallet confirmation and ETH gas." : ""}`
             : method === "play" ? `Use ${quantity} ${definition.consumable.toLowerCase()} from ${friend.label}.`
-            : method === "settle" ? `RNG request: ${formatEther(LIVE_GAME_MAX_ORACLE_FEE)} ETH, plus transaction gas. Request the Dice result and settle this play. Pending plays reuse their existing request without another RNG fee or consumable.`
-            : `${quantity} ${outcome!.name}; ${liveRef.current ? "RF" : "simulated RF"} returns to this Friend.`,
-          notice: method === "settle" ? "Rare Friends plans to subsidize RNG costs for all developers to improve the user experience and reduce costs. This demo does not include the subsidy; it demonstrates the paid RNG flow." : undefined,
+            : method === "settle" && (globalThis as RuntimeGlobal).__FRIENDSDK_LIVE__ !== false ? `RNG request: ${formatEther(LIVE_GAME_MAX_ORACLE_FEE)} ETH, plus transaction gas. Request the Dice result and settle this play. Pending plays reuse their existing request without another RNG fee or consumable.`
+            : method === "settle" ? "Resolve this pending play."
+            : `${quantity} ${outcome!.name}; ${(globalThis as RuntimeGlobal).__FRIENDSDK_LIVE__ !== false && liveRef.current ? "RF" : "simulated RF"} returns to this Friend.`,
+          notice: (globalThis as RuntimeGlobal).__FRIENDSDK_LIVE__ !== false && method === "settle" ? "Rare Friends plans to subsidize RNG costs for all developers to improve the user experience and reduce costs. This demo does not include the subsidy; it demonstrates the paid RNG flow." : undefined,
           amount: method === "buy" ? definition.price * quantity : outcome ? outcome.reward * quantity : undefined,
           onConfirm: () => finish(true), onCancel: () => finish(false),
         });
@@ -299,7 +306,7 @@ function EmbeddedSession({ friend, client, definition, live, frameUrl, picker }:
       const channel = new MessageChannel();
       const bridgeEpoch = ++epoch.current;
       let activeClient: GameClient;
-      try { activeClient = liveRef.current ? createLiveGameClient({ ...liveRef.current, assertActive() {
+      try { activeClient = (globalThis as RuntimeGlobal).__FRIENDSDK_LIVE__ !== false && liveRef.current ? createLiveGameClient({ ...liveRef.current, assertActive() {
         if (!alive || epoch.current !== bridgeEpoch) throw new Error("Game session changed.");
         liveRef.current?.assertActive?.();
       } }) : client!; }
@@ -334,7 +341,7 @@ function EmbeddedSession({ friend, client, definition, live, frameUrl, picker }:
     };
   }, [client, definition, friend.id, attempt]);
 
-  async function topUp() {
+  const topUp = (globalThis as RuntimeGlobal).__FRIENDSDK_LIVE__ !== false ? async () => {
     if (fundingRef.current || actionPending.current || !liveRef.current) return;
     fundingRef.current = true; setFunding(true); setFundMessage("");
     bridge.current?.setPaused(true);
@@ -352,13 +359,13 @@ function EmbeddedSession({ friend, client, definition, live, frameUrl, picker }:
     } catch (cause) {
       if (mounted.current) setFundMessage(cause instanceof Error ? cause.message : "RF transfer failed.");
     } finally { fundingRef.current = false; if (mounted.current) { setFunding(false); bridge.current?.setPaused(paused.current); } }
-  }
+  } : undefined;
   return <GameFrame mode={mode} selectionMode={picker ? "picker" : "host"} friends={[friend]} selectedFriendId={friend.id}
     wallet={{ balance: snapshot?.rfBalance, status: snapshot ? "ready" : "loading" }}
-    walletActions={live ? <div className="rf-runtime-connection">
+    walletActions={(globalThis as RuntimeGlobal).__FRIENDSDK_LIVE__ !== false && live ? <div className="rf-runtime-connection">
       <p>Transfer RF from your connected wallet to this Friend to buy bait. This is a real RF transfer plus ETH gas.</p>
       <label>RF amount <input aria-label="RF amount" value={fundAmount} disabled={funding} inputMode="decimal" onChange={event => setFundAmount(event.target.value)} /></label>
-      <button type="button" disabled={funding || transactionPending} onClick={() => { void topUp(); }}>{funding ? "Confirming transfer…" : "Transfer RF to Friend"}</button>
+      <button type="button" disabled={funding || transactionPending} onClick={() => { void topUp?.(); }}>{funding ? "Confirming transfer…" : "Transfer RF to Friend"}</button>
       {transactionPending && <p role="status">Finish the pending game action before transferring RF.</p>}
       {fundMessage && <p role="status">{fundMessage}</p>}
     </div> : undefined}

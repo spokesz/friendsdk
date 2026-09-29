@@ -1,6 +1,6 @@
 # Oracle operations and recovery
 
-FriendSDK v0.1.3 uses Dice for paid chance-game outcomes. Simulated games do not
+FriendSDK v0.1.4 uses Dice for paid chance-game outcomes. Simulated games do not
 request oracle delivery. The browser runtime handles the normal request and
 settlement flow; these notes cover developer operations on a committed play.
 

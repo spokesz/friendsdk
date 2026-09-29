@@ -130,7 +130,7 @@ export async function buildGame(gameDirectory, { outdir = path.join(gameDirector
   };
   const common = {
     absWorkingDir: directory, bundle: true, format: 'iife', platform: 'browser', target: 'es2022', jsx: 'automatic',
-    define: { 'process.env.NODE_ENV': '"production"' }, minify: true, logLevel: 'warning',
+    define: { 'process.env.NODE_ENV': '"production"', 'globalThis.__FRIENDSDK_LIVE__': liveDeployment ? 'true' : 'false' }, minify: true, logLevel: 'warning',
     loader: { '.png': 'file', '.jpg': 'file', '.webp': 'file', '.svg': 'file', '.woff2': 'file', '.mp3': 'file', '.wav': 'file' },
     assetNames: 'assets/[name]-[hash]', plugins: [sdkExports, outputTracking], metafile: true,
     alias: { react: path.dirname(require.resolve('react/package.json')), 'react-dom': path.dirname(require.resolve('react-dom/package.json')) },

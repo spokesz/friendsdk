@@ -162,7 +162,7 @@ Do not expose funding or transaction clients to sandboxed game code.
   Rare Friends review.
 
 See [the runtime guide and capability list](HOST_INTEGRATION.md). Trading,
-creator fees and wearable NFTs are not implemented SDK v0.1.3 capabilities.
+creator fees and wearable NFTs are not implemented SDK v0.1.4 capabilities.
 
 Contracts live in `contracts/`; read its `AGENTS.md` and `COMMANDMENTS.md` before
 contract work. Reference existing mainnet RF, Generations, canonical NFT wallets

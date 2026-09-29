@@ -1,4 +1,4 @@
-# Embedded fishing example · FriendSDK v0.1.3
+# Embedded fishing example · FriendSDK v0.1.4
 
 This example configures the reusable `GameHost` runtime with the fishing game.
 `GameHost` provides wallet connection, owned Friend discovery and selection,

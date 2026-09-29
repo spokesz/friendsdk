@@ -1,4 +1,4 @@
-# Standalone FriendSDK v0.1.3 contracts
+# Standalone FriendSDK v0.1.4 contracts
 
 The package supplies immutable RF chance-game contracts and deployment tools.
 RF, Generations, canonical NFT wallets and Dice are existing mainnet dependencies

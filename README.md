@@ -1,4 +1,4 @@
-# FriendSDK v0.1.3
+# FriendSDK v0.1.4
 
 Build a playable Rare Friends game with your AI coding agent. You create the
 experience and game rules; the SDK supplies wallet connection, owned Friend
@@ -298,12 +298,12 @@ also needs [LAN networking configuration](https://learn.microsoft.com/en-us/wind
 
 ## Install in an existing project
 
-Download `rarefriends-friendsdk-0.1.3.tgz` from the
-[v0.1.3 GitHub release](https://github.com/spokesz/friendsdk/releases/tag/v0.1.3)
+Download `rarefriends-friendsdk-0.1.4.tgz` from the
+[v0.1.4 GitHub release](https://github.com/spokesz/friendsdk/releases/tag/v0.1.4)
 into your existing project, then run there:
 
 ```sh
-npm install ./rarefriends-friendsdk-0.1.3.tgz react react-dom
+npm install ./rarefriends-friendsdk-0.1.4.tgz react react-dom
 npx friendsdk init ./games/my-game
 npx friendsdk dev ./games/my-game
 ```
@@ -404,7 +404,7 @@ For vibeathon game submissions, include a **public playable preview URL** in the
 submission README and PR description, with the required wallet/network and
 controls. GitHub Pages is an allowed host; use the steps above.
 
-Submit the game source and assets, run instructions, SDK version **v0.1.3** and
+Submit the game source and assets, run instructions, SDK version **v0.1.4** and
 exact costs and rules for its items, rewards, upgrades and currencies. Include
 outcome weights and consumable rules when using the supplied chance game. RF uses
 bigint base units (`1 RF = 10n ** 18n`). In that chance game, each purchased
@@ -432,5 +432,5 @@ may host submission previews themselves or through their own Pages workflow.
 | [Contracts](contracts/README.md) | Optional contract deployment and developer tooling |
 | [Oracle operations](docs/oracle/README.md) | RNG delivery, pending plays and proposed recovery work |
 
-Trading, creator fees and wearable NFTs are not implemented in v0.1.3. See the
+Trading, creator fees and wearable NFTs are not implemented in v0.1.4. See the
 [capability list](HOST_INTEGRATION.md#capabilities) for the full supported scope.

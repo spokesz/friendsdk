@@ -1,6 +1,6 @@
 # Long Meadow: a scrolling world
 
-SDK **v0.1.3**. Explore a **2400 × 1600** meadow through the SDK's **960 × 640**
+SDK **v0.1.4**. Explore a **2400 × 1600** meadow through the SDK's **960 × 640**
 viewing window. The 576 × 384 ground plane belongs to the optional SDK renderer;
 custom worlds and cameras can be any size. This example uses a small custom
 top-down canvas renderer with its own terrain, collision and follow camera.
@@ -38,7 +38,7 @@ and hidden tabs stop movement. Failed artwork reads show a retry control.
 
 Exploration costs **0 RF** and has no purchases, consumables or rewards. Marker
 visits are local session progress and reset on reload; they are not saved to the
-Friend. The v0.1.3 runtime still requires a chance-game `game.json`, so this
+Friend. The v0.1.4 runtime still requires a chance-game `game.json`, so this
 example includes **unused schema-only terms**: a 1 RF token with a single 100%
 (10,000 basis points) 1 RF reward, each encoded as `1000000000000000000` RF base
 units. The component never calls `buy`, `play`, `settle` or `redeem`; those terms

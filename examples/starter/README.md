@@ -1,6 +1,6 @@
 # Game component starter
 
-SDK version **v0.1.3**. This component is a small playable garden with a pack
+SDK version **v0.1.4**. This component is a small playable garden with a pack
 dispenser and an opening station. It has no application routes, navigation,
 wallet connection code or identity gate. The SDK runtime supplies those game
 infrastructure capabilities and the selected, verified owned Friend.
