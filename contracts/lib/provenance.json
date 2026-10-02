@@ -6,6 +6,10 @@
       "sha256": "76b05dda37981797d3d403f29fc6cad79b46e2fc11da47d649ff13acb69158b2"
     },
     {
+      "path": "forge-std/src/Script.sol",
+      "sha256": "cfb5be01f4ddbc037a3502dac3d487d629a4c8b58aa9e2ec48c9fa1b334d96ec"
+    },
+    {
       "path": "forge-std/src/StdAssertions.sol",
       "sha256": "203de35565c3d68b6599f84e88068f79c23b53a80d18c46056e85d4c5f48613c"
     },
@@ -76,6 +80,10 @@
     {
       "path": "forge-std/src/safeconsole.sol",
       "sha256": "fd74d8ed377e1470217cd6dce7699dcbc4e79b3893f17ae2a298c0e7e4418181"
+    },
+    {
+      "path": "openzeppelin-contracts/contracts/access/Ownable.sol",
+      "sha256": "38578bd71c0a909840e67202db527cc6b4e6b437e0f39f0c909da32c1e30cb81"
     },
     {
       "path": "openzeppelin-contracts/contracts/interfaces/IERC1363.sol",

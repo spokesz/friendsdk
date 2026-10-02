@@ -1,0 +1,40 @@
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+out = "out"
+cache_path = "cache"
+libs = ["../contracts/lib"]
+allow_paths = [".."]
+remappings = [
+    "lib/=../contracts/lib/",
+    "forge-std/=../contracts/lib/forge-std/src/",
+]
+solc_version = "0.8.36"
+auto_detect_solc = false
+optimizer = true
+optimizer_runs = 200
+evm_version = "cancun"
+bytecode_hash = "none"
+cbor_metadata = false
+fs_permissions = [{ access = "read-write", path = "./deployments" }]
+
+[rpc_endpoints]
+robinhood = "${ROBINHOOD_RPC_URL}"
+
+[fuzz]
+runs = 256
+
+[fmt]
+line_length = 100
+tab_width = 4
+bracket_spacing = true
+int_types = "long"
+quote_style = "double"
+number_underscore = "thousands"
+wrap_comments = true
+
+[invariant]
+runs = 64
+depth = 32
+fail_on_revert = false

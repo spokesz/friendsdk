@@ -1,0 +1,18 @@
+{
+  "chainId": 4663,
+  "coordinator": "0xDbde561D864Fc78B05188F1C5BdCe507C357bd51",
+  "custody": "0x37702f6b25217e5eF34F6b3aF589476CEa35Be3a",
+  "custodyExecutor": "0xd76a0393F3CE045E6f49f6e97AfD41EC98CcBd61",
+  "deploymentBlock": 78421708,
+  "drawModule": "0x2646cA00E5e08a100E07e5492E6BB34204FafF63",
+  "gameId": 1,
+  "generations": "0x14C49e6118F46525dE9ab41a51cBAA3c6EBF181D",
+  "items": "0x018436dc77Ec421631D83B059E9F5B51b3CC4246",
+  "owner": "0xAa8662d1F2A2Ce0cE67eE13B96D5ae21f3b10D3F",
+  "registry": "0x158Cbc6d0ADB3db4c3faF9F5d210A3c98AA29b4b",
+  "roundModule": "0x4b841ee1Bb2fa2A561B6786cA56015d19CecED9D",
+  "schemaVersion": 2,
+  "termsHash": "0x5af8a4dd01e421a59d9e248a3a12ac1d550d30251f80a8dae49161e7bec1eaed",
+  "treasury": "0x85a577EB7A654A34114C8c21Cec6aE293d8B8507",
+  "usdg": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"
+}

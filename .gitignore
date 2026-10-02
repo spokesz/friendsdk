@@ -6,3 +6,7 @@ contracts/cache/
 contracts/deployments/
 
 .friendsdk/
+platform-contracts/out/
+platform-contracts/cache/
+
+platform-contracts/broadcast/
